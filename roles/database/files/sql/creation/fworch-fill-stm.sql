@@ -91,16 +91,24 @@ insert into config (config_key, config_value, config_user) VALUES ('modAppServer
 insert into config (config_key, config_value, config_user) VALUES ('modReqInterfaceName', '', 0);
 insert into config (config_key, config_value, config_user) VALUES ('modReqEmailReceiver', 'OwnerGroupOnly', 0);
 insert into config (config_key, config_value, config_user) VALUES ('modReqEmailRequesterInCc', 'true', 0);
+insert into config (config_key, config_value, config_user) VALUES ('modReqEmailOtherAddresses', '', 0);
 insert into config (config_key, config_value, config_user) VALUES ('modReqEmailSubject', '', 0);
 insert into config (config_key, config_value, config_user) VALUES ('modReqEmailBody', '', 0);
 insert into config (config_key, config_value, config_user) VALUES ('modReqTicketTitle', '', 0);
 insert into config (config_key, config_value, config_user) VALUES ('modReqTaskTitle', '', 0);
+insert into config (config_key, config_value, config_user) VALUES ('modDecommEmailReceiver', 'None', 0);
+insert into config (config_key, config_value, config_user) VALUES ('modDecommEmailOtherAddresses', '', 0);
+insert into config (config_key, config_value, config_user) VALUES ('modDecommEmailSubject', '', 0);
+insert into config (config_key, config_value, config_user) VALUES ('modDecommEmailBody', '', 0);
 insert into config (config_key, config_value, config_user) VALUES ('modRolloutActive', 'true', 0);
 insert into config (config_key, config_value, config_user) VALUES ('modRolloutResolveServiceGroups', 'true', 0);
 insert into config (config_key, config_value, config_user) VALUES ('modRolloutBundleTasks', 'false', 0);
 insert into config (config_key, config_value, config_user) VALUES ('modRolloutNatHeuristic', 'false', 0);
+insert into config (config_key, config_value, config_user) VALUES ('modRolloutRemovedAppServers', 'false', 0);
+insert into config (config_key, config_value, config_user) VALUES ('modRequestOnlyOwnObjects', 'false', 0);
 insert into config (config_key, config_value, config_user) VALUES ('modRolloutErrorText', 'Error during external request', 0);
 insert into config (config_key, config_value, config_user) VALUES ('modRecertActive', 'false', 0);
+insert into config (config_key, config_value, config_user) VALUES ('modRecertExpectAllModelled', 'false', 0);
 insert into config (config_key, config_value, config_user) VALUES ('modRecertText', '', 0);
 insert into config (config_key, config_value, config_user) VALUES ('modIconify', 'True', 0);
 insert into config (config_key, config_value, config_user) VALUES ('reducedProtocolSet', 'True', 0);
@@ -132,10 +140,11 @@ insert into config (config_key, config_value, config_user) VALUES ('autoReplaceA
 insert into config (config_key, config_value, config_user) VALUES ('ownerLdapId', '1', 0);
 insert into config (config_key, config_value, config_user) VALUES ('ownerLdapGroupNames', 'ModellerGroup_@@ExternalAppId@@', 0);
 insert into config (config_key, config_value, config_user) VALUES ('manageOwnerLdapGroups', 'true', 0);
+insert into config (config_key, config_value, config_user) VALUES ('ownerDataImportSyncUsers', 'true', 0);
 insert into config (config_key, config_value, config_user) VALUES ('modModelledMarker', 'FWOC', 0);
 insert into config (config_key, config_value, config_user) VALUES ('modModelledMarkerLocation', 'rulename', 0);
 insert into config (config_key, config_value, config_user) VALUES ('ruleRecognitionOption', '{"nwRegardIp":true,"nwRegardName":false,"nwRegardGroupName":false,"nwResolveGroup":false,"svcRegardPortAndProt":true,"svcRegardName":false,"svcRegardGroupName":false,"svcResolveGroup":true,"svcSplitPortRanges":false}', 0);
-insert into config (config_key, config_value, config_user) VALUES ('availableReportTypes', '[1,2,3,4,5,6,7,8,9,10,21,22,31]', 0);
+insert into config (config_key, config_value, config_user) VALUES ('availableReportTypes', '[1,2,3,4,5,6,7,8,9,10,21,22,31,32]', 0);
 insert into config (config_key, config_value, config_user) VALUES ('varianceAnalysisSleepTime', '0', 0);
 insert into config (config_key, config_value, config_user) VALUES ('varianceAnalysisStartAt', '00:00:00', 0);
 insert into config (config_key, config_value, config_user) VALUES ('varianceAnalysisSync', 'false', 0);
@@ -143,16 +152,36 @@ insert into config (config_key, config_value, config_user) VALUES ('varianceAnal
 insert into config (config_key, config_value, config_user) VALUES ('resolveNetworkAreas', 'False', 0);
 insert into config (config_key, config_value, config_user) VALUES ('complianceCheckSleepTime', '0', 0);
 insert into config (config_key, config_value, config_user) VALUES ('complianceCheckStartAt', '00:00:00', 0);
-insert into config (config_key, config_value, config_user) VALUES ('complianceCheckMailRecipients', '', 0);
-insert into config (config_key, config_value, config_user) VALUES ('complianceCheckMailSubject', '', 0);
-insert into config (config_key, config_value, config_user) VALUES ('complianceCheckMailBody', '', 0);
 insert into config (config_key, config_value, config_user) VALUES ('complianceCheckPolicy', '0', 0);
-insert into config (config_key, config_value, config_user) VALUES ('complianceCheckScheduledDiffReports', '[]', 0);
-insert into config (config_key, config_value, config_user) VALUES ('complianceCheckDiffReferenceInterval', '0', 0);
-insert into config (config_key, config_value, config_user) VALUES ('complianceCheckInternetZoneObject', '', 0);
+insert into config (config_key, config_value, config_user) VALUES ('complianceCheckMaxPrintedViolations', '0', 0);
+insert into config (config_key, config_value, config_user) VALUES ('complianceCheckSortMatrixByID', 'false', 0);
 insert into config (config_key, config_value, config_user) VALUES ('availableModules', '[1,2,3,4,5,6]', 0);
 insert into config (config_key, config_value, config_user) VALUES ('debugConfig', '{"debugLevel":8, "extendedLogComplianceCheck":true, "extendedLogReportGeneration":true, "extendedLogScheduler":true}', 0);
-
+insert into config (config_key, config_value, config_user) VALUES ('reportSchedulerConfig', '', 0);
+insert into config (config_key, config_value, config_user) VALUES ('autoCalculateInternetZone', 'true', 0);
+insert into config (config_key, config_value, config_user) VALUES ('autoCalculateUndefinedInternalZone', 'true', 0);
+insert into config (config_key, config_value, config_user) VALUES ('internalZoneRange_10_0_0_0_8', 'true', 0);
+insert into config (config_key, config_value, config_user) VALUES ('internalZoneRange_172_16_0_0_12', 'true', 0);
+insert into config (config_key, config_value, config_user) VALUES ('internalZoneRange_192_168_0_0_16', 'true', 0);
+insert into config (config_key, config_value, config_user) VALUES ('internalZoneRange_0_0_0_0_8', 'true', 0);
+insert into config (config_key, config_value, config_user) VALUES ('internalZoneRange_127_0_0_0_8', 'true', 0);
+insert into config (config_key, config_value, config_user) VALUES ('internalZoneRange_169_254_0_0_16', 'true', 0);
+insert into config (config_key, config_value, config_user) VALUES ('internalZoneRange_224_0_0_0_4', 'true', 0);
+insert into config (config_key, config_value, config_user) VALUES ('internalZoneRange_240_0_0_0_4', 'true', 0);
+insert into config (config_key, config_value, config_user) VALUES ('internalZoneRange_255_255_255_255_32', 'true', 0);
+insert into config (config_key, config_value, config_user) VALUES ('internalZoneRange_192_0_2_0_24', 'true', 0);
+insert into config (config_key, config_value, config_user) VALUES ('internalZoneRange_198_51_100_0_24', 'true', 0);
+insert into config (config_key, config_value, config_user) VALUES ('internalZoneRange_203_0_113_0_24', 'true', 0);
+insert into config (config_key, config_value, config_user) VALUES ('internalZoneRange_100_64_0_0_10', 'true', 0);
+insert into config (config_key, config_value, config_user) VALUES ('internalZoneRange_192_0_0_0_24', 'true', 0);
+insert into config (config_key, config_value, config_user) VALUES ('internalZoneRange_192_88_99_0_24', 'true', 0);
+insert into config (config_key, config_value, config_user) VALUES ('internalZoneRange_198_18_0_0_15', 'true', 0);
+insert into config (config_key, config_value, config_user) VALUES ('autoCalculatedZonesAtTheEnd', 'true', 0);
+insert into config (config_key, config_value, config_user) VALUES ('treatDynamicAndDomainObjectsAsInternet', 'true', 0);
+insert into config (config_key, config_value, config_user) VALUES ('showShortColumnsInComplianceReports', 'true', 0);
+insert into config (config_key, config_value, config_user) VALUES ('importedMatrixReadOnly', 'true', 0);
+insert into config (config_key, config_value, config_user) VALUES ('complianceCheckElementsPerFetch', '500', 0);
+insert into config (config_key, config_value, config_user) VALUES ('complianceCheckAvailableProcessors', '4', 0);
 
 INSERT INTO "report_format" ("report_format_name") VALUES ('json');
 INSERT INTO "report_format" ("report_format_name") VALUES ('pdf');
@@ -274,7 +303,7 @@ INSERT INTO "report_template" ("report_filter","report_template_name","report_te
                 "recertShowAnyMatch": true,
                 "recertificationDisplayPeriod": 30}}');
 INSERT INTO "report_template" ("report_filter","report_template_name","report_template_comment","report_template_owner", "report_parameters") 
-    VALUES ('',
+    VALUES ('action=accept',
         'Compliance: Unresolved violations','T0108', 0, 
         '{"report_type":31,"device_filter":{"management":[]},
             "time_filter": {
@@ -290,10 +319,27 @@ INSERT INTO "report_template" ("report_filter","report_template_name","report_te
                 "open_start": false,
                 "open_end": false},
             "compliance_filter": {
-                "isDiffReport": false,
-                "diffReferenceInDays": 0,
-                "showCompliantRules": false,
-                "excludedRuleActions": ["inner layer", "drop"]}}');
+                "diff_reference_in_days": 0,
+                "show_non_impact_rules": true}}');
+INSERT INTO "report_template" ("report_filter","report_template_name","report_template_comment","report_template_owner", "report_parameters") 
+    VALUES ('action=accept',
+        'Compliance: Diffs','T0109', 0, 
+        '{"report_type":32,"device_filter":{"management":[]},
+            "time_filter": {
+                "is_shortcut": true,
+                "shortcut": "now",
+                "report_time": "2022-01-01T00:00:00.0000000+01:00",
+                "timerange_type": "SHORTCUT",
+                "shortcut_range": "this year",
+                "offset": 0,
+                "interval": "DAYS",
+                "start_time": "2022-01-01T00:00:00.0000000+01:00",
+                "end_time": "2022-01-01T00:00:00.0000000+01:00",
+                "open_start": false,
+                "open_end": false},
+            "compliance_filter": {
+                "diff_reference_in_days": 7,
+                "show_non_impact_rules": false}}');
 
 insert into parent_rule_type (id, name) VALUES (1, 'section');          -- do not restart numbering
 insert into parent_rule_type (id, name) VALUES (2, 'guarded-layer');    -- restart numbering, rule restrictions are ANDed to all rules below it, layer is not entered if guard does not apply
@@ -330,7 +376,7 @@ insert into stm_obj_typ (obj_typ_id,obj_typ_name) VALUES (17,'voip_sip');
 insert into stm_obj_typ (obj_typ_id,obj_typ_name) VALUES (18,'simple-gateway');
 insert into stm_obj_typ (obj_typ_id,obj_typ_name) VALUES (19,'external-gateway');
 insert into stm_obj_typ (obj_typ_id,obj_typ_name) VALUES (20,'voip');   -- general voip object replacing old specific ones and including CpmiVoipSipDomain
-insert into stm_obj_typ (obj_typ_id,obj_typ_name) VALUES (21,'access-role'); 
+insert into stm_obj_typ (obj_typ_id,obj_typ_name) VALUES (21,'access-role');
 
 insert into stm_action (action_id,action_name) VALUES (1,'accept'); -- cp, fortinet
 insert into stm_action (action_id,action_name, allowed) VALUES (2,'drop', FALSE); -- cp
@@ -443,6 +489,10 @@ insert into stm_dev_typ (dev_typ_id,dev_typ_name,dev_typ_version,dev_typ_manufac
     VALUES (26,'NSX','REST','VMWare','',false,true,false) ON CONFLICT DO NOTHING;
 insert into stm_dev_typ (dev_typ_id,dev_typ_name,dev_typ_version,dev_typ_manufacturer,dev_typ_predef_svc,dev_typ_is_multi_mgmt,dev_typ_is_mgmt,is_pure_routing_device)
     VALUES (27,'NSX DFW Gateway','REST','VMWare','',false,false,false) ON CONFLICT DO NOTHING;
+insert into stm_dev_typ (dev_typ_id,dev_typ_name,dev_typ_version,dev_typ_manufacturer,dev_typ_predef_svc,dev_typ_is_multi_mgmt,dev_typ_is_mgmt,is_pure_routing_device)
+    VALUES (28,'Cisco Asa','9','Cisco','',false,true,false);
+insert into stm_dev_typ (dev_typ_id,dev_typ_name,dev_typ_version,dev_typ_manufacturer,dev_typ_predef_svc,dev_typ_is_multi_mgmt,dev_typ_is_mgmt,is_pure_routing_device)
+    VALUES (29,'Cisco Asa on FirePower','9','Cisco','',false,true,false);
 
 -- SET statement_timeout = 0;
 -- SET client_encoding = 'UTF8';
@@ -490,11 +540,35 @@ insert into request.state (id,name) VALUES (600,'Done');
 insert into request.state (id,name) VALUES (610,'Rejected');
 insert into request.state (id,name) VALUES (620,'Discarded');
 
-INSERT INTO owner (id, name, dn, group_dn, is_default, recert_interval, app_id_external) 
-VALUES    (0, 'super-owner', 'uid=admin,ou=tenant0,ou=operator,ou=user,dc=fworch,dc=internal', 'group-dn-for-super-owner', true, 365, 'NONE')
-ON CONFLICT DO NOTHING; 
+INSERT INTO owner (id, name, is_default, recert_interval, app_id_external) 
+VALUES    (0, 'super-owner', true, 365, 'NONE');
+INSERT INTO owner_responsible_type (id, name, active, sort_order, allow_modelling, allow_recertification)
+VALUES
+    (1, 'Main responsible', true, 10, true, true),
+    (2, 'Supporting responsible', true, 20, true, true),
+    (3, 'Optional escalation responsible', true, 30, false, false)
+ON CONFLICT DO NOTHING;
+INSERT INTO owner_responsible (owner_id, dn, responsible_type)
+VALUES
+    (0, 'uid=admin,ou=tenant0,ou=operator,ou=user,dc=fworch,dc=internal', 1),
+    (0, 'group-dn-for-super-owner', 2)
+ON CONFLICT DO NOTHING;
 
 insert into stm_link_type (id, name) VALUES (2, 'ordered');
 insert into stm_link_type (id, name) VALUES (3, 'inline');
 insert into stm_link_type (id, name) VALUES (4, 'concatenated');
 insert into stm_link_type (id, name) VALUES (5, 'domain');
+
+-- insert into compliance.assessability_issue_type (type_id, type_name) VALUES (1, 'empty group');
+-- insert into compliance.assessability_issue_type (type_id, type_name) VALUES (2, 'broadcast address');
+-- insert into compliance.assessability_issue_type (type_id, type_name) VALUES (3, 'DHCP IP undefined address');
+-- insert into compliance.assessability_issue_type (type_id, type_name) VALUES (4, 'dynamic internet address');
+
+INSERT INTO stm_import (import_type_id, import_type_name) VALUES (1, 'rule');
+INSERT INTO stm_import (import_type_id, import_type_name) VALUES (2, 'owner');
+INSERT INTO stm_import (import_type_id, import_type_name) VALUES (3, 'admin via reinitialize button');
+
+INSERT INTO stm_owner_mapping_source (owner_mapping_source_type_id, owner_mapping_source_type_name) VALUES (1, 'ip_based');
+INSERT INTO stm_owner_mapping_source (owner_mapping_source_type_id, owner_mapping_source_type_name) VALUES (2, 'custom_field');
+INSERT INTO stm_owner_mapping_source (owner_mapping_source_type_id, owner_mapping_source_type_name) VALUES (3, 'name_field');
+INSERT INTO stm_owner_mapping_source (owner_mapping_source_type_id, owner_mapping_source_type_name) VALUES (4, 'manual');

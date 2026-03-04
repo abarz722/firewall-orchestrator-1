@@ -1,9 +1,10 @@
-using NUnit.Framework;
 using System.Collections.Generic;
 using System.Linq;
 using FWO.Services.RuleTreeBuilder;
 using FWO.Data;
 using FWO.Data.Report;
+using FWO.Basics;
+using NUnit.Framework;
 
 namespace FWO.Test
 {
@@ -11,214 +12,6 @@ namespace FWO.Test
     internal class RuleTreeBuilderTest
     {
         private RuleTreeBuilder _ruleTreeBuilder = default!;
-        private RulebaseLink[] _rulebaseLinks = default!;
-        private RulebaseReport[] _rulebases = default!;
-        private RuleTreeItem _control_tree = default!;
-
-        [OneTimeSetUp]
-        public void SetUpTestClass()
-        {
-            _rulebaseLinks =
-            [
-                new RulebaseLink
-                {
-                    NextRulebaseId = 1,
-                    LinkType = 2,
-                    IsInitial = true
-                },
-                new RulebaseLink
-                {
-                    NextRulebaseId = 2,
-                    LinkType = 2
-                },
-                new RulebaseLink
-                {
-                    FromRulebaseId = 2,
-                    NextRulebaseId = 3,
-                    LinkType = 4,
-                    IsSection = true
-                },
-                new RulebaseLink
-                {
-                    FromRulebaseId = 3,
-                    NextRulebaseId = 4,
-                    LinkType = 4,
-                    IsSection = true
-                },
-                new RulebaseLink
-                {
-                    FromRuleId = 8,
-                    FromRulebaseId = 4,
-                    NextRulebaseId = 5,
-                    LinkType = 3
-                }
-            ];
-
-            _rulebases =
-            [
-                new RulebaseReport
-                {
-                    Id = 1,
-                    Name = "Ordered layer with rules",
-                    Rules = new[]
-                    {
-                        new Rule { Id = 1, Uid = "rule-1.1", RulebaseId = 1 },
-                        new Rule { Id = 2, Uid = "rule-1.2", RulebaseId = 1 },
-                        new Rule { Id = 3, Uid = "rule-1.3", RulebaseId = 1 }
-                    }
-                },
-                new RulebaseReport
-                {
-                    Id = 2,
-                    Name = "Ordered layer with sections",
-                },
-                new RulebaseReport
-                {
-                    Id = 3,
-                    Name = "First section in ordered layer",
-                    Rules = new[]
-                    {
-                        new Rule { Id = 4, Uid = "rule-2.1", RulebaseId = 3 },
-                        new Rule { Id = 5, Uid = "rule-2.2", RulebaseId = 3 },
-                        new Rule { Id = 6, Uid = "rule-2.3", RulebaseId = 3 }
-                    }
-                },
-                new RulebaseReport
-                {
-                    Id = 4,
-                    Name = "Section with inline layer",
-                    Rules = new[]
-                    {
-                        new Rule { Id = 7, Uid = "rule-2.4", RulebaseId = 4 },
-                        new Rule { Id = 8, Uid = "rule-2.5", RulebaseId = 4 },
-                        new Rule { Id = 9, Uid = "rule-2.6", RulebaseId = 4 }
-                    }
-                },
-                new RulebaseReport
-                {
-                    Id = 5,
-                    Name = "Inline layer",
-                    Rules = new[]
-                    {
-                        new Rule { Id = 10, Uid = "rule-2.5.1", RulebaseId = 5 },
-                        new Rule { Id = 11, Uid = "rule-2.5.2", RulebaseId = 5 },
-                        new Rule { Id = 12, Uid = "rule-2.5.3", RulebaseId = 5 }
-                    }
-                }
-            ];
-
-            _control_tree = new RuleTreeItem
-            {
-                IsRoot = true,
-                Children = new List<Basics.ITreeItem<Rule>>
-                {
-                    new RuleTreeItem
-                    {
-                        Header = "Ordered layer with rules",
-                        Children = new List<Basics.ITreeItem<Rule>>
-                        {
-                            new RuleTreeItem
-                            {
-                                Identifier = "Rule (ID/UID): 1/rule-1.1",
-                                Data = new Rule { Id = 1, Uid = "rule-1.1", RulebaseId = 1 },
-                                Position = new List<int>{1,1}
-                            },
-                            new RuleTreeItem
-                            {
-                                Identifier = "Rule (ID/UID): 2/rule-1.2",
-                                Data = new Rule { Id = 2, Uid = "rule-1.2", RulebaseId = 1 },
-                                Position = new List<int>{1,2}
-                            },
-                            new RuleTreeItem
-                            {
-                                Identifier = "Rule (ID/UID): 3/rule-1.3",
-                                Data = new Rule { Id = 3, Uid = "rule-1.3", RulebaseId = 1 },
-                                Position = new List<int>{1,3}
-                            }
-                        }
-                    },
-                    new RuleTreeItem
-                    {
-                        Header = "Ordered layer with sections",
-                        Children = new List<Basics.ITreeItem<Rule>>
-                        {
-                            new RuleTreeItem
-                            {
-                                Header = "First section in ordered layer",
-                                Children = new List<Basics.ITreeItem<Rule>>
-                                {
-                                    new RuleTreeItem
-                                    {
-                                        Identifier = "Rule (ID/UID): 4/rule-2.1",
-                                        Data = new Rule { Id = 4, Uid = "rule-2.1", RulebaseId = 3 },
-                                        Position = new List<int>{2,1}
-                                    },
-                                    new RuleTreeItem
-                                    {
-                                        Identifier = "Rule (ID/UID): 5/rule-2.2",
-                                        Data = new Rule { Id = 5, Uid = "rule-2.2", RulebaseId = 3 },
-                                        Position = new List<int>{2,2}
-                                    },
-                                    new RuleTreeItem
-                                    {
-                                        Identifier = "Rule (ID/UID): 6/rule-2.3",
-                                        Data = new Rule { Id = 6, Uid = "rule-2.3", RulebaseId = 3 },
-                                        Position = new List<int>{2,3}
-                                    }
-                                }
-                            },
-                            new RuleTreeItem
-                            {
-                                Header = "Section with inline layer",
-                                Children = new List<Basics.ITreeItem<Rule>>
-                                {
-                                    new RuleTreeItem
-                                    {
-                                        Identifier = "Rule (ID/UID): 7/rule-2.4",
-                                        Data = new Rule { Id = 7, Uid = "rule-2.4", RulebaseId = 4 },
-                                        Position = new List<int>{2,4}
-                                    },
-                                    new RuleTreeItem
-                                    {
-                                        Identifier = "Rule (ID/UID): 8/rule-2.5",
-                                        Data = new Rule { Id = 8, Uid = "rule-2.5", RulebaseId = 4 },
-                                        Position = new List<int>{2,5},
-                                        Children = new List<Basics.ITreeItem<Rule>>
-                                        {
-                                            new RuleTreeItem
-                                            {
-                                                Identifier = "Rule (ID/UID): 10/rule-2.5.1",
-                                                Data = new Rule { Id = 10, Uid = "rule-2.5.1", RulebaseId = 5 },
-                                                Position = new List<int>{2,5,1}
-                                            },
-                                            new RuleTreeItem
-                                            {
-                                                Identifier = "Rule (ID/UID): 11/rule-2.5.2",
-                                                Data = new Rule { Id = 11, Uid = "rule-2.5.2", RulebaseId = 5 },
-                                                Position = new List<int>{2,5,2}
-                                            },
-                                            new RuleTreeItem
-                                            {
-                                                Identifier = "Rule (ID/UID): 12/rule-2.5.3",
-                                                Data = new Rule { Id = 12, Uid = "rule-2.5.3", RulebaseId = 5 },
-                                                Position = new List<int>{2,5,3}
-                                            }
-
-                                        }
-                                    },
-                                    new RuleTreeItem
-                                    {
-                                        Identifier = "Rule (ID/UID): 9/rule-2.6",
-                                        Data = new Rule { Id = 9, Uid = "rule-2.6", RulebaseId = 4 },
-                                        Position = new List<int>{2,6}
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            };
-        }
 
         [SetUp]
         public void SetUpTestMethod()
@@ -227,48 +20,195 @@ namespace FWO.Test
         }
 
         [Test]
-        public void BuildRulebaseLinkQueue_WithEmptyArraysAsArgs_ReturnsNull()
+        public void BuildRuleTree_OrderedLayerOnly_ReturnsAllRules()
         {
             // Arrange
-
-            Queue<(RulebaseLink, RulebaseReport)>? queue;
+            RulebaseReport[] rulebases =
+            [
+                Rulebase(1, "Layer-1", 10, 11)
+            ];
+            RulebaseLink[] links =
+            [
+                OrderedLayerInitialLink(gatewayId: 1, nextRulebaseId: 1)
+            ];
 
             // Act
-
-            queue = _ruleTreeBuilder.BuildRulebaseLinkQueue([], []);
+            List<Rule> resultRules = _ruleTreeBuilder.BuildRuleTree(rulebases, links, 1, 1).Where(rule => rule.SectionHeader == "").ToList();
 
             // Assert
-
-            Assert.That(queue is null);
+            Assert.That(resultRules.Count == 2);
+            Assert.That(_ruleTreeBuilder.RuleTree.ElementsFlat.Count(element => element.IsRule) == 2);
+            Assert.That(_ruleTreeBuilder.RuleTree.ElementsFlat.Count(element => element.IsSectionHeader) == 0);
+            Assert.That(FindOrderedLayerRoots(_ruleTreeBuilder.RuleTree).Count == 1);
         }
 
         [Test]
-        public void BuildRulebaseLinkQueue_WithArraysFromSetUp_ReturnsQueue()
+        public void BuildRuleTree_SectionAndConcatenationLinks_CreateSectionHeaders()
         {
             // Arrange
-
-            Queue<(RulebaseLink, RulebaseReport)>? queue;
+            RulebaseReport[] rulebases =
+            [
+                Rulebase(1, "Layer-1", 10),
+                Rulebase(2, "Section-A", 20),
+                Rulebase(3, "Concat-B", 30)
+            ];
+            RulebaseLink[] links =
+            [
+                OrderedLayerInitialLink(gatewayId: 1, nextRulebaseId: 1),
+                SectionLink(gatewayId: 1, fromRulebaseId: 1, nextRulebaseId: 2),
+                ConcatenationLink(gatewayId: 1, fromRulebaseId: 2, nextRulebaseId: 3)
+            ];
 
             // Act
-
-            queue = _ruleTreeBuilder.BuildRulebaseLinkQueue(_rulebaseLinks, _rulebases);
+            List<Rule> resultRules = _ruleTreeBuilder.BuildRuleTree(rulebases, links, 1, 1);
 
             // Assert
-
-            Assert.That(queue is Queue<(RulebaseLink, RulebaseReport)>);
+            Assert.That(resultRules.Count == 6);
+            Assert.That(_ruleTreeBuilder.RuleTree.ElementsFlat.Count(element => element.IsRule) == 3);
+            Assert.That(_ruleTreeBuilder.RuleTree.ElementsFlat.Count(element => element.IsSectionHeader) == 2);
+            Assert.That(FindOrderedLayerRoots(_ruleTreeBuilder.RuleTree).Count == 1);
         }
-        
+
         [Test]
-        public void BuildRuleTree_WithArraysFromSetUp_CreatesCorrectStructure()
+        public void BuildRuleTree_InlineLayerFromRule_AddsInlineLayerAndRules()
         {
-            // Act
+            // Arrange
+            RulebaseReport[] rulebases =
+            [
+                Rulebase(1, "Layer-1", 10, 11),
+                Rulebase(2, "Inline-1", 20, 21)
+            ];
+            RulebaseLink[] links =
+            [
+                OrderedLayerInitialLink(gatewayId: 1, nextRulebaseId: 1),
+                InlineLayerLink(gatewayId: 1, fromRulebaseId: 1, fromRuleId: 10, nextRulebaseId: 2)
+            ];
 
-            _ruleTreeBuilder.BuildRulebaseLinkQueue(_rulebaseLinks, _rulebases);
-            _ruleTreeBuilder.BuildRuleTree();
+            // Act
+            List<Rule> resultRules = _ruleTreeBuilder.BuildRuleTree(rulebases, links, 1, 1).Where(rule => rule.SectionHeader == "").ToList();
 
             // Assert
-            Assert.That(_ruleTreeBuilder.RuleTree.ToJson(), Is.EqualTo(_control_tree.ToJson()));
+            Assert.That(resultRules.Count == 4);
+            Assert.That(_ruleTreeBuilder.RuleTree.ElementsFlat.Count(element => element.IsRule) == 4);
         }
 
+        [Test]
+        public void BuildRuleTree_InlineLayerWithSection_AddsSectionHeader()
+        {
+            // Arrange
+            RulebaseReport[] rulebases =
+            [
+                Rulebase(1, "Layer-1", 10),
+                Rulebase(2, "Inline-1", 20),
+                Rulebase(3, "Inline-Section", 30)
+            ];
+            RulebaseLink[] links =
+            [
+                OrderedLayerInitialLink(gatewayId: 1, nextRulebaseId: 1),
+                InlineLayerLink(gatewayId: 1, fromRulebaseId: 1, fromRuleId: 10, nextRulebaseId: 2),
+                SectionLink(gatewayId: 1, fromRulebaseId: 2, nextRulebaseId: 3)
+            ];
+
+            // Act
+            List<Rule> resultRules = _ruleTreeBuilder.BuildRuleTree(rulebases, links, 1, 1).Where(rule => rule.SectionHeader == "").ToList();
+
+            // Assert
+            Assert.That(resultRules.Count == 3);
+            Assert.That(_ruleTreeBuilder.RuleTree.ElementsFlat.Count(element => element.IsRule) == 3);
+            Assert.That(_ruleTreeBuilder.RuleTree.ElementsFlat.Count(element => element.IsSectionHeader) == 1);
+        }
+
+        private static RulebaseReport Rulebase(int id, string name, params int[] ruleIds)
+        {
+            return new RulebaseReport
+            {
+                Id = id,
+                Name = name,
+                Rules = ruleIds.Select(ruleId => new Rule { Id = ruleId, RulebaseId = id, Name = $"R-{ruleId}" }).ToArray()
+            };
+        }
+
+        private static RulebaseLink OrderedLayerInitialLink(int gatewayId, int nextRulebaseId)
+        {
+            return new RulebaseLink
+            {
+                GatewayId = gatewayId,
+                FromRulebaseId = null,
+                FromRuleId = null,
+                NextRulebaseId = nextRulebaseId,
+                LinkType = 2,
+                IsInitial = true,
+                IsGlobal = false,
+                IsSection = false
+            };
+        }
+
+        private static RulebaseLink SectionLink(int gatewayId, int fromRulebaseId, int nextRulebaseId)
+        {
+            return new RulebaseLink
+            {
+                GatewayId = gatewayId,
+                FromRulebaseId = fromRulebaseId,
+                FromRuleId = null,
+                NextRulebaseId = nextRulebaseId,
+                LinkType = 4,
+                IsInitial = false,
+                IsGlobal = false,
+                IsSection = true
+            };
+        }
+
+        private static RulebaseLink ConcatenationLink(int gatewayId, int fromRulebaseId, int nextRulebaseId)
+        {
+            return new RulebaseLink
+            {
+                GatewayId = gatewayId,
+                FromRulebaseId = fromRulebaseId,
+                FromRuleId = null,
+                NextRulebaseId = nextRulebaseId,
+                LinkType = 4,
+                IsInitial = false,
+                IsGlobal = false,
+                IsSection = false
+            };
+        }
+
+        private static RulebaseLink InlineLayerLink(int gatewayId, int fromRulebaseId, int fromRuleId, int nextRulebaseId)
+        {
+            return new RulebaseLink
+            {
+                GatewayId = gatewayId,
+                FromRulebaseId = fromRulebaseId,
+                FromRuleId = fromRuleId,
+                NextRulebaseId = nextRulebaseId,
+                LinkType = 3,
+                IsInitial = false,
+                IsGlobal = false,
+                IsSection = false
+            };
+        }
+
+        private static List<RuleTreeItem> FindOrderedLayerRoots(RuleTreeItem root)
+        {
+            List<RuleTreeItem> results = new();
+            Queue<RuleTreeItem> queue = new();
+            queue.Enqueue(root);
+
+            while (queue.Count > 0)
+            {
+                RuleTreeItem current = queue.Dequeue();
+                if (current.IsOrderedLayerHeader)
+                {
+                    results.Add(current);
+                }
+
+                foreach (ITreeItem<Rule> child in current.Children)
+                {
+                    queue.Enqueue((RuleTreeItem)child);
+                }
+            }
+
+            return results;
+        }
     }
 }

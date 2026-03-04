@@ -32,9 +32,13 @@ namespace FWO.Api.Client.Queries
 
         public static readonly string getUsageDataCount;
         public static readonly string getImportsToNotify;
+        public static readonly string getImportsToNotifyForAnyChanges;
         public static readonly string setImportsNotified;
 
-        static ReportQueries() 
+        public static readonly string getManagementForNormalizedConfig;
+        public static readonly string getManagementForLatestNormalizedConfig;
+
+        static ReportQueries()
         {
             try
             {
@@ -62,14 +66,20 @@ namespace FWO.Api.Client.Queries
                 addGeneratedReport = GetQueryText("report/addGeneratedReport.graphql");
                 getUsageDataCount = GetQueryText("report/getUsageDataCount.graphql");
                 // note: currently we only check for rule changes, but this should be extended to other changes in the future
-                // getImportsToNotify = GetQueryText("report/getImportsToNotifyForAnyChanges.phql");
                 getImportsToNotify = GetQueryText("report/getImportsToNotifyForRuleChanges.graphql");
+                getImportsToNotifyForAnyChanges = GetQueryText("report/getImportsToNotifyForAnyChanges.graphql");
                 setImportsNotified = GetQueryText("report/setImportsNotified.graphql");
+                getManagementForNormalizedConfig = GetQueryText("report/getManagementForNormalizedConfig.graphql");
+                getManagementForLatestNormalizedConfig = GetQueryText("report/getManagementForLatestNormalizedConfig.graphql");
             }
             catch (Exception exception)
             {
                 Log.WriteError("Initialize Api Queries", "Api ReportQueries could not be loaded.", exception);
+#if RELEASE
                 Environment.Exit(-1);
+#else
+                throw;
+#endif
             }
         }
     }

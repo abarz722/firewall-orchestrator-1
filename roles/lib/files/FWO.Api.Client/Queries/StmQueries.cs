@@ -1,4 +1,4 @@
-﻿using FWO.Logging;
+using FWO.Logging;
 
 namespace FWO.Api.Client.Queries
 {
@@ -7,7 +7,6 @@ namespace FWO.Api.Client.Queries
         public static readonly string getIpProtocols;
         public static readonly string getRuleActions;
         public static readonly string getTracking;
-
 
         static StmQueries()
         {
@@ -20,7 +19,11 @@ namespace FWO.Api.Client.Queries
             catch (Exception exception)
             {
                 Log.WriteError("Initialize StmQueries", "Api StmQueries could not be loaded.", exception);
+#if RELEASE
                 Environment.Exit(-1);
+#else
+                throw;
+#endif
             }
         }
     }

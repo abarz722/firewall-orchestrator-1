@@ -1,20 +1,27 @@
-from pydantic import Field
+from typing import Any
 
-class Management():
-    Id: int
-    Name: str
-    Uid: str
-    Hostname: str
-    ImportDisabled: bool
-    Devices: dict
-    ImporterHostname: str
-    DeviceTypeName: str
-    DeviceTypeVersion: str
-    Port: int
-    ImportUser: str
-    Secret: str
-    IsSuperManager: bool
-    SubManagerIds: list[int] = []
-    DomainName: str = Field(alias='configPath', default='')
-    DomainUid: str = Field(alias='domainUid', default='')
-    SubManagers: list['Management'] = Field(default=[], alias='subManager')
+from pydantic import BaseModel
+
+
+class Management(BaseModel):
+    mgm_id: int
+    name: str
+    uid: str
+    is_super_manager: bool
+    hostname: str
+    import_disabled: bool
+    devices: list[dict[str, Any]]
+    importer_hostname: str
+    device_type_name: str
+    device_type_version: str
+    port: int
+    import_user: str
+    secret: str
+    sub_manager_ids: list[int]
+    current_mgm_id: int
+    current_mgm_is_super_manager: bool
+    domain_name: str | None
+    domain_uid: str | None
+    sub_managers: list["Management"]
+    cloud_client_id: str | None = None
+    cloud_client_secret: str | None = None

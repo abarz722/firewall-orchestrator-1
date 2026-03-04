@@ -93,6 +93,9 @@ namespace FWO.Config.Api.Data
         [JsonProperty("impChangeNotifyActive"), JsonPropertyName("impChangeNotifyActive")]
         public bool ImpChangeNotifyActive { get; set; } = false;
 
+        [JsonProperty("impChangeIncludeObjectChanges"), JsonPropertyName("impChangeIncludeObjectChanges")]
+        public bool ImpChangeIncludeObjectChanges { get; set; } = false;
+
         [JsonProperty("impChangeNotifyType"), JsonPropertyName("impChangeNotifyType")]
         public int ImpChangeNotifyType { get; set; }
 
@@ -102,15 +105,32 @@ namespace FWO.Config.Api.Data
         [JsonProperty("impChangeNotifyStartAt"), JsonPropertyName("impChangeNotifyStartAt")]
         public DateTime ImpChangeNotifyStartAt { get; set; } = DateTime.Now;
 
+        [JsonProperty("updateRuleOwnerMappingActive"), JsonPropertyName("updateRuleOwnerMappingActive")]
+        public bool UpdateRuleOwnerMappingActive { get; set; } = false;
+
+        [JsonProperty("updateRuleOwnerMappingSleepTime"), JsonPropertyName("updateRuleOwnerMappingSleepTime")]
+        public int UpdateRuleOwnerMappingSleepTime { get; set; } = 60;
+
+        [JsonProperty("updateRuleOwnerMappingStartAt"), JsonPropertyName("updateRuleOwnerMappingStartAt")]
+        public DateTime UpdateRuleOwnerMappingStartAt { get; set; } = DateTime.Now;
+
         [JsonProperty("externalRequestSleepTime"), JsonPropertyName("externalRequestSleepTime")]
         public int ExternalRequestSleepTime { get; set; } = 60;
 
         [JsonProperty("externalRequestStartAt"), JsonPropertyName("externalRequestStartAt")]
         public DateTime ExternalRequestStartAt { get; set; } = DateTime.Now;
 
+        [JsonProperty("recertificationMode"), JsonPropertyName("recertificationMode")]
+        public RecertificationMode RecertificationMode { get; set; } = RecertificationMode.RuleByRule;
 
         [JsonProperty("recertificationPeriod"), JsonPropertyName("recertificationPeriod")]
         public int RecertificationPeriod { get; set; } = 365;
+
+        [JsonProperty("initialRecertificationPeriod"), JsonPropertyName("initialRecertificationPeriod")]
+        public int InitialRecertificationPeriod { get; set; } = 365;
+
+        [JsonProperty("initialRecertifier"), JsonPropertyName("initialRecertifier")]
+        public string InitialRecertifier { get; set; } = "";
 
         [JsonProperty("recertificationNoticePeriod"), JsonPropertyName("recertificationNoticePeriod")]
         public int RecertificationNoticePeriod { get; set; } = 30;
@@ -236,7 +256,7 @@ namespace FWO.Config.Api.Data
         public bool AllowManualOwnerAdmin { get; set; } = false;
 
         [JsonProperty("reqPriorities"), JsonPropertyName("reqPriorities")]
-        public string ReqPriorities { get; set; } = "";
+        public string ReqPriorities { get; set; } = "[]";
 
         [JsonProperty("reqAutoCreateImplTasks"), JsonPropertyName("reqAutoCreateImplTasks")]
         public AutoCreateImplTaskOptions ReqAutoCreateImplTasks { get; set; } = AutoCreateImplTaskOptions.never;
@@ -249,7 +269,6 @@ namespace FWO.Config.Api.Data
 
         [JsonProperty("ruleOwnershipMode"), JsonPropertyName("ruleOwnershipMode")]
         public RuleOwnershipMode RuleOwnershipMode { get; set; } = RuleOwnershipMode.mixed;
-
 
         [JsonProperty("allowServerInConn"), JsonPropertyName("allowServerInConn")]
         public bool AllowServerInConn { get; set; } = true;
@@ -278,6 +297,9 @@ namespace FWO.Config.Api.Data
         [JsonProperty("importAppDataPath"), JsonPropertyName("importAppDataPath")]
         public string ImportAppDataPath { get; set; } = "";
 
+        [JsonProperty("importAppDataScriptArgs"), JsonPropertyName("importAppDataScriptArgs")]
+        public string ImportAppDataScriptArgs { get; set; } = "";
+
         [JsonProperty("importAppDataSleepTime"), JsonPropertyName("importAppDataSleepTime")]
         public int ImportAppDataSleepTime { get; set; } = 24;
 
@@ -292,7 +314,19 @@ namespace FWO.Config.Api.Data
 
         [JsonProperty("ownerLdapGroupNames"), JsonPropertyName("ownerLdapGroupNames")]
         public string OwnerLdapGroupNames { get; set; } = GlobalConst.kLdapGroupPattern;
-        
+
+        [JsonProperty("OwnerSoruceMappingID"), JsonPropertyName("OwnerSoruceMappingID")]
+        public int OwnerSoruceMappingID { get; set; } = 0;
+
+        [JsonProperty("OwnerSourceCustomFieldKey"), JsonPropertyName("OwnerSourceCustomFieldKey")]
+        public string OwnerSourceCustomFieldKey { get; set; } = "";
+
+        [JsonProperty("rolesWithAppDataImport"), JsonPropertyName("rolesWithAppDataImport")]
+        public string RolesWithAppDataImport { get; set; } = "[]";
+
+        [JsonProperty("ownerDataImportSyncUsers"), JsonPropertyName("ownerDataImportSyncUsers")]
+        public bool OwnerDataImportSyncUsers { get; set; } = true;
+
         [JsonProperty("importSubnetDataPath"), JsonPropertyName("importSubnetDataPath")]
         public string ImportSubnetDataPath { get; set; } = "";
 
@@ -324,10 +358,13 @@ namespace FWO.Config.Api.Data
         public string ModReqInterfaceName { get; set; } = "";
 
         [JsonProperty("modReqEmailReceiver"), JsonPropertyName("modReqEmailReceiver")]
-        public EmailRecipientOption ModReqEmailReceiver { get; set; } = EmailRecipientOption.FallbackToMainResponsibleIfOwnerGroupEmpty;
+        public string ModReqEmailReceiver { get; set; } = nameof(EmailRecipientOption.None);
 
         [JsonProperty("modReqEmailRequesterInCc"), JsonPropertyName("modReqEmailRequesterInCc")]
         public bool ModReqEmailRequesterInCc { get; set; } = true;
+
+        [JsonProperty("modReqEmailOtherAddresses"), JsonPropertyName("modReqEmailOtherAddresses")]
+        public string ModReqEmailOtherAddresses { get; set; } = "";
 
         [JsonProperty("modReqEmailSubject"), JsonPropertyName("modReqEmailSubject")]
         public string ModReqEmailSubject { get; set; } = "";
@@ -335,11 +372,26 @@ namespace FWO.Config.Api.Data
         [JsonProperty("modReqEmailBody"), JsonPropertyName("modReqEmailBody")]
         public string ModReqEmailBody { get; set; } = "";
 
+        [JsonProperty("modUnansweredReqEmailBody"), JsonPropertyName("modUnansweredReqEmailBody")]
+        public string ModUnansweredReqEmailBody { get; set; } = "";
+
         [JsonProperty("modReqTicketTitle"), JsonPropertyName("modReqTicketTitle")]
         public string ModReqTicketTitle { get; set; } = "";
 
         [JsonProperty("modReqTaskTitle"), JsonPropertyName("modReqTaskTitle")]
         public string ModReqTaskTitle { get; set; } = "";
+
+        [JsonProperty("modDecommEmailReceiver"), JsonPropertyName("modDecommEmailReceiver")]
+        public string ModDecommEmailReceiver { get; set; } = nameof(EmailRecipientOption.None);
+
+        [JsonProperty("modDecommEmailOtherAddresses"), JsonPropertyName("modDecommEmailOtherAddresses")]
+        public string ModDecommEmailOtherAddresses { get; set; } = "";
+
+        [JsonProperty("modDecommEmailSubject"), JsonPropertyName("modDecommEmailSubject")]
+        public string ModDecommEmailSubject { get; set; } = "";
+
+        [JsonProperty("modDecommEmailBody"), JsonPropertyName("modDecommEmailBody")]
+        public string ModDecommEmailBody { get; set; } = "";
 
         [JsonProperty("modRolloutActive"), JsonPropertyName("modRolloutActive")]
         public bool ModRolloutActive { get; set; } = true;
@@ -353,11 +405,20 @@ namespace FWO.Config.Api.Data
         [JsonProperty("modRolloutNatHeuristic"), JsonPropertyName("modRolloutNatHeuristic")]
         public bool ModRolloutNatHeuristic { get; set; } = false;
 
+        [JsonProperty("modRolloutRemovedAppServers"), JsonPropertyName("modRolloutRemovedAppServers")]
+        public bool ModRolloutRemovedAppServers { get; set; } = false;
+
+        [JsonProperty("modRequestOnlyOwnObjects"), JsonPropertyName("modRequestOnlyOwnObjects")]
+        public bool ModRequestOnlyOwnObjects { get; set; } = false;
+
         [JsonProperty("modRolloutErrorText"), JsonPropertyName("modRolloutErrorText")]
         public string ModRolloutErrorText { get; set; } = "";
 
         [JsonProperty("modRecertActive"), JsonPropertyName("modRecertActive")]
         public bool ModRecertActive { get; set; } = false;
+
+        [JsonProperty("modRecertExpectAllModelled"), JsonPropertyName("modRecertExpectAllModelled")]
+        public bool ModRecertExpectAllModelled { get; set; } = false;
 
         [JsonProperty("modRecertText"), JsonPropertyName("modRecertText")]
         public string ModRecertText { get; set; } = "";
@@ -422,8 +483,96 @@ namespace FWO.Config.Api.Data
         [JsonProperty("complianceCheckInternetZoneObject"), JsonPropertyName("complianceCheckInternetZoneObject")]
         public string ComplianceCheckInternetZoneObject { get; set; } = "";
 
+        [JsonProperty("complianceCheckMaxPrintedViolations"), JsonPropertyName("complianceCheckMaxPrintedViolations")]
+        public int ComplianceCheckMaxPrintedViolations { get; set; } = 0;
+
+        [JsonProperty("complianceCheckSortMatrixByID"), JsonPropertyName("complianceCheckSortMatrixByID")]
+        public bool ComplianceCheckSortMatrixByID { get; set; } = false;
+
+        [JsonProperty("complianceCheckRelevantManagements"), JsonPropertyName("complianceCheckRelevantManagements")]
+        public string ComplianceCheckRelevantManagements { get; set; } = "";
+
+        [JsonProperty("reportSchedulerConfig"), JsonPropertyName("reportSchedulerConfig")]
+        public string ReportSchedulerConfig { get; set; } = "";
+
         [JsonProperty("debugConfig"), JsonPropertyName("debugConfig")]
         public string DebugConfig { get; set; } = "";
+
+        [JsonProperty("autoCalculateInternetZone"), JsonPropertyName("autoCalculateInternetZone")]
+        public bool AutoCalculateInternetZone { get; set; } = true;
+
+        [JsonProperty("autoCalculateUndefinedInternalZone"), JsonPropertyName("autoCalculateUndefinedInternalZone")]
+        public bool AutoCalculateUndefinedInternalZone { get; set; } = true;
+
+        [JsonProperty("internalZoneRange_10_0_0_0_8"), JsonPropertyName("internalZoneRange_10_0_0_0_8")]
+        public bool InternalZoneRange_10_0_0_0_8 { get; set; } = true;
+
+        [JsonProperty("internalZoneRange_172_16_0_0_12"), JsonPropertyName("internalZoneRange_172_16_0_0_12")]
+        public bool InternalZoneRange_172_16_0_0_12 { get; set; } = true;
+
+        [JsonProperty("internalZoneRange_192_168_0_0_16"), JsonPropertyName("internalZoneRange_192_168_0_0_16")]
+        public bool InternalZoneRange_192_168_0_0_16 { get; set; } = true;
+
+        [JsonProperty("internalZoneRange_0_0_0_0_8"), JsonPropertyName("internalZoneRange_0_0_0_0_8")]
+        public bool InternalZoneRange_0_0_0_0_8 { get; set; } = true;
+
+        [JsonProperty("internalZoneRange_127_0_0_0_8"), JsonPropertyName("internalZoneRange_127_0_0_0_8")]
+        public bool InternalZoneRange_127_0_0_0_8 { get; set; } = true;
+
+        [JsonProperty("internalZoneRange_169_254_0_0_16"), JsonPropertyName("internalZoneRange_169_254_0_0_16")]
+        public bool InternalZoneRange_169_254_0_0_16 { get; set; } = true;
+
+        [JsonProperty("internalZoneRange_224_0_0_0_4"), JsonPropertyName("internalZoneRange_224_0_0_0_4")]
+        public bool InternalZoneRange_224_0_0_0_4 { get; set; } = true;
+
+        [JsonProperty("internalZoneRange_240_0_0_0_4"), JsonPropertyName("internalZoneRange_240_0_0_0_4")]
+        public bool InternalZoneRange_240_0_0_0_4 { get; set; } = true;
+
+        [JsonProperty("internalZoneRange_255_255_255_255_32"), JsonPropertyName("internalZoneRange_255_255_255_255_32")]
+        public bool InternalZoneRange_255_255_255_255_32 { get; set; } = true;
+
+        [JsonProperty("internalZoneRange_192_0_2_0_24"), JsonPropertyName("internalZoneRange_192_0_2_0_24")]
+        public bool InternalZoneRange_192_0_2_0_24 { get; set; } = true;
+
+        [JsonProperty("internalZoneRange_198_51_100_0_24"), JsonPropertyName("internalZoneRange_198_51_100_0_24")]
+        public bool InternalZoneRange_198_51_100_0_24 { get; set; } = true;
+
+        [JsonProperty("internalZoneRange_203_0_113_0_24"), JsonPropertyName("internalZoneRange_203_0_113_0_24")]
+        public bool InternalZoneRange_203_0_113_0_24 { get; set; } = true;
+
+        [JsonProperty("internalZoneRange_100_64_0_0_10"), JsonPropertyName("internalZoneRange_100_64_0_0_10")]
+        public bool InternalZoneRange_100_64_0_0_10 { get; set; } = true;
+
+        [JsonProperty("internalZoneRange_192_0_0_0_24"), JsonPropertyName("internalZoneRange_192_0_0_0_24")]
+        public bool InternalZoneRange_192_0_0_0_24 { get; set; } = true;
+
+        [JsonProperty("internalZoneRange_192_88_99_0_24"), JsonPropertyName("internalZoneRange_192_88_99_0_24")]
+        public bool InternalZoneRange_192_88_99_0_24 { get; set; } = true;
+
+        [JsonProperty("internalZoneRange_198_18_0_0_15"), JsonPropertyName("internalZoneRange_198_18_0_0_15")]
+        public bool InternalZoneRange_198_18_0_0_15 { get; set; } = true;
+
+        [JsonProperty("autoCalculatedZonesAtTheEnd"), JsonPropertyName("autoCalculatedZonesAtTheEnd")]
+        public bool AutoCalculatedZonesAtTheEnd { get; set; } = true;
+
+        [JsonProperty("treatDynamicAndDomainObjectsAsInternet"), JsonPropertyName("treatDynamicAndDomainObjectsAsInternet")]
+        public bool TreatDynamicAndDomainObjectsAsInternet { get; set; } = true;
+
+        [JsonProperty("showShortColumnsInComplianceReports"), JsonPropertyName("showShortColumnsInComplianceReports")]
+        public bool ShowShortColumnsInComplianceReports { get; set; } = true;
+
+        [JsonProperty("importedMatrixReadOnly"), JsonPropertyName("importedMatrixReadOnly")]
+        public bool ImportedMatrixReadOnly { get; set; } = true;
+
+        [JsonProperty("complianceCheckElementsPerFetch"), JsonPropertyName("complianceCheckElementsPerFetch")]
+        public int ComplianceCheckElementsPerFetch { get; set; } = 500;
+
+        [JsonProperty("complianceCheckAvailableProcessors"), JsonPropertyName("complianceCheckAvailableProcessors")]
+        public int ComplianceCheckAvailableProcessors { get; set; } = 4;
+
+        [JsonProperty("complianceFilterOutInitialViolations"), JsonPropertyName("complianceFilterOutInitialViolations")]
+        public bool ComplianceFilterOutInitialViolations { get; set; } = false;
+
 
         public ConfigData(bool editable = false)
         {

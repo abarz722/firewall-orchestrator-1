@@ -1,14 +1,17 @@
-from pydantic import BaseModel
+from typing import Any
 
-from fwo_base import ConfigAction, ConfFormat
-from models.rulebase import Rulebase
-from models.networkobject import NetworkObject
-from models.serviceobject import ServiceObject
+from fwo_base import ConfFormat, ConfigAction
 from models.gateway import Gateway
+from models.networkobject import NetworkObject
+from models.rulebase import Rulebase
+from models.serviceobject import ServiceObject
+from models.time_object import TimeObject
+from pydantic import BaseModel
 
 
 class FwConfig(BaseModel):
     ConfigFormat: ConfFormat = ConfFormat.NORMALIZED
+
 
 """
     the normalized configuraton of a firewall management to import
@@ -39,44 +42,58 @@ class FwConfig(BaseModel):
 
     }
 
-    write methods to 
+    write methods to
         a) split a config into < X MB chunks
         b) combine configs to a single config
 
 """
+
+
 class FwConfigNormalized(FwConfig):
     action: ConfigAction = ConfigAction.INSERT
     network_objects: dict[str, NetworkObject] = {}
     service_objects: dict[str, ServiceObject] = {}
-    users: dict = {}
-    zone_objects: dict = {}
+    users: dict[str, Any] = {}
+    zone_objects: dict[str, Any] = {}
+    time_objects: dict[str, TimeObject] = {}
     rulebases: list[Rulebase] = []
     gateways: list[Gateway] = []
-    ConfigFormat: ConfFormat = ConfFormat.NORMALIZED_LEGACY
+    ConfigFormat: ConfFormat = ConfFormat.NORMALIZED
 
+    model_config = {"arbitrary_types_allowed": True}
 
-    model_config = {
-        "arbitrary_types_allowed": True
-    }
-
-
-    def getRulebase(self, rulebaseUid: str) -> Rulebase:
+    def get_rulebase(self, rulebase_uid: str) -> Rulebase:
         """
-        get the policy with a specific uid  
-        :param policyUid: The UID of the relevant policy.
-        :return: Returns the policy with a specific uid, otherwise returns empty policy.
+        Get the policy with a specific uid
+
+        Args:
+            rulebase_uid (str): The UID of the relevant policy.
+
+        Returns:
+            Rulebase: Returns the policy with a specific uid.
+
+        Raises:
+            KeyError: If no policy with the given uid is found.
+
+        """
+        rulebase = self.get_rulebase_or_none(rulebase_uid)
+        if rulebase is not None:
+            return rulebase
+
+        raise KeyError(f"Rulebase with UID {rulebase_uid} not found.")
+
+    def get_rulebase_or_none(self, rulebase_uid: str) -> Rulebase | None:
+        """
+        Get the policy with a specific uid
+
+        Args:
+            rulebase_uid (str): The UID of the relevant policy.
+
+        Returns:
+            Rulebase | None: Returns the policy with a specific uid or None if not found.
+
         """
         for rb in self.rulebases:
-            if rb.uid == rulebaseUid:
+            if rb.uid == rulebase_uid:
                 return rb
-        return Rulebase(uid='', name='', mgm_uid='')
-
-
-    def getOrderedRuleList(self, policyUid: str) -> list[dict]:
-        """
-        get the policy with a specific uid as an ordered list (ordered by rule_num)
-        :param policyUid: The UID of the relevant policy.
-        :return: Returns the policy with a specific uid as an ordered list [ruleUid, rule_num].
-        """
-        ruleList = [{'Uid': rule_uid, 'rule_num': details['rule_num']} for rule_uid, details in self.getRulebase(policyUid).items()]
-        return sorted(ruleList, key=lambda x: x['rule_num'])
+        return None

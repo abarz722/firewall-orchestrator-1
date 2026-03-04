@@ -1,5 +1,6 @@
-﻿using System.Text.Json.Serialization; 
+using System.Text.Json.Serialization;
 using Newtonsoft.Json;
+using SystemTextJsonIgnore = System.Text.Json.Serialization.JsonIgnoreAttribute;
 
 namespace FWO.Data
 {
@@ -35,14 +36,20 @@ namespace FWO.Data
         [JsonProperty("rule_svc"), JsonPropertyName("rule_svc")]
         public string Service { get; set; } = "";
 
+        [JsonProperty("rule_svc_refs"), JsonPropertyName("rule_svc_refs")]
+        public string ServiceRefs { get; set; } = "";
+
         [JsonProperty("rule_src_neg"), JsonPropertyName("rule_src_neg")]
         public bool SourceNegated { get; set; }
 
         [JsonProperty("rule_src"), JsonPropertyName("rule_src")]
         public string Source { get; set; } = "";
 
-        [JsonProperty("src_zone"), JsonPropertyName("src_zone")]
-        public NetworkZone? SourceZone { get; set; } = new ();
+        [JsonProperty("rule_src_refs"), JsonPropertyName("rule_src_refs")]
+        public string SourceRefs { get; set; } = "";
+
+        [JsonProperty("rule_from_zones"), JsonPropertyName("rule_from_zones")]
+        public ZoneWrapper[] RuleFromZones { get; set; } = [];
 
         [JsonProperty("rule_froms"), JsonPropertyName("rule_froms")]
         public NetworkLocation[] Froms { get; set; } = [];
@@ -53,8 +60,11 @@ namespace FWO.Data
         [JsonProperty("rule_dst"), JsonPropertyName("rule_dst")]
         public string Destination { get; set; } = "";
 
-        [JsonProperty("dst_zone"), JsonPropertyName("dst_zone")]
-        public NetworkZone? DestinationZone { get; set; } = new ();
+        [JsonProperty("rule_dst_refs"), JsonPropertyName("rule_dst_refs")]
+        public string DestinationRefs { get; set; } = "";
+
+        [JsonProperty("rule_to_zones"), JsonPropertyName("rule_to_zones")]
+        public ZoneWrapper[] RuleToZones { get; set; } = [];
 
         [JsonProperty("rule_tos"), JsonPropertyName("rule_tos")]
         public NetworkLocation[] Tos { get; set; } = [];
@@ -69,22 +79,43 @@ namespace FWO.Data
         public string? SectionHeader { get; set; } = "";
 
         [JsonProperty("rule_metadatum"), JsonPropertyName("rule_metadatum")]
-        public RuleMetadata Metadata {get; set;} = new ();
+        public RuleMetadata Metadata { get; set; } = new();
+
+        [SystemTextJsonIgnore]
+        [JsonProperty("rule_last_seen"), JsonPropertyName("rule_last_seen")]
+        public long? LastSeenImportId { get; set; }
+
+        [SystemTextJsonIgnore]
+        [JsonProperty("importControlByRuleLastSeen"), JsonPropertyName("importControlByRuleLastSeen")]
+        public ImportControl? LastSeenImport { get; set; }
+        
+        [SystemTextJsonIgnore]
+        [JsonProperty("createdImport"), JsonPropertyName("createdImport")]
+        public ImportControl? CreatedImport { get; set; }
+
+        [SystemTextJsonIgnore]
+        public DateTime? LastModified => LastSeenImport?.StartTime ?? Metadata?.Created;
 
         [JsonProperty("translate"), JsonPropertyName("translate")]
-        public NatData NatData {get; set;} = new ();
+        public NatData NatData { get; set; } = new();
 
         [JsonProperty("owner_name"), JsonPropertyName("owner_name")]
-        public string OwnerName {get; set;} = "";
+        public string OwnerName { get; set; } = "";
 
         [JsonProperty("owner_id"), JsonPropertyName("owner_id")]
-        public int? OwnerId {get; set;}
+        public int? OwnerId { get; set; }
 
         [JsonProperty("matches"), JsonPropertyName("matches")]
-        public string IpMatch {get; set;} = "";
+        public string IpMatch { get; set; } = "";
 
         [JsonProperty("rule_custom_fields"), JsonPropertyName("rule_custom_fields")]
         public string CustomFields { get; set; } = "";
+
+        [JsonProperty("rule_implied"), JsonPropertyName("rule_implied")]
+        public bool Implied { get; set; }
+
+        [JsonProperty("nat_rule"), JsonPropertyName("nat_rule")]
+        public bool NatRule { get; set; }
 
         [JsonProperty("rulebase_id"), JsonPropertyName("rulebase_id")]
         public int RulebaseId { get; set; }
@@ -94,15 +125,33 @@ namespace FWO.Data
 
         [JsonProperty("rule_enforced_on_gateways"), JsonPropertyName("rule_enforced_on_gateways")]
         public DeviceWrapper[] EnforcingGateways { get; set; } = [];
-        
+
         [JsonProperty("rule_installon"), JsonPropertyName("rule_installon")]
-        public string InstallOn { get; set; } = "";
+        public string? InstallOn { get; set; }
+
+        [JsonProperty("rule_time"), JsonPropertyName("rule_time")]
+        public string? Time { get; set; }
+
+        [JsonProperty("rule_times"), JsonPropertyName("rule_times")]
+        public List<RuleTime> RuleTimes { get; set; } = [];
+
+        [JsonProperty("violations"), JsonPropertyName("violations")]
+        public List<ComplianceViolation> Violations { get; set; } = [];
+
+        [JsonProperty("rulebase"), JsonPropertyName("rulebase")]
+        public Rulebase Rulebase { get; set; } = new();
+
+        [JsonProperty("uiuser"), JsonPropertyName("uiuser")]
+        public UiUser? LastChangeAdmin { get; set; }
+
+        [JsonProperty("rule"), JsonPropertyName("rule")]
+        public Rule? ParentRule { get; set; }
+
         public string ChangeID { get; set; } = "";
         public string AdoITID { get; set; } = "";
 
         public ComplianceViolationType Compliance { get; set; } = ComplianceViolationType.None;
         public string ViolationDetails { get; set; } = "";
-        public List<ComplianceViolation> Violations { get; set; } = [];
 
         public string DisplayOrderNumberString { get; set; } = "";
         public int DisplayOrderNumber { get; set; }
@@ -138,11 +187,13 @@ namespace FWO.Data
             Service = rule.Service;
             SourceNegated = rule.SourceNegated;
             Source = rule.Source;
-            SourceZone = rule.SourceZone;
+            SourceRefs = rule.SourceRefs;
+            RuleFromZones = rule.RuleFromZones;
             Froms = rule.Froms;
             DestinationNegated = rule.DestinationNegated;
             Destination = rule.Destination;
-            DestinationZone = rule.DestinationZone;
+            DestinationRefs = rule.DestinationRefs;
+            RuleToZones = rule.RuleToZones;
             Tos = rule.Tos;
             Action = rule.Action;
             Track = rule.Track;
@@ -153,10 +204,24 @@ namespace FWO.Data
             OwnerId = rule.OwnerId;
             IpMatch = rule.IpMatch;
             CustomFields = rule.CustomFields;
+            Implied = rule.Implied;
+            NatRule = rule.NatRule;
+            RulebaseId = rule.RulebaseId;
+            RuleOrderNumber = rule.RuleOrderNumber;
+            EnforcingGateways = rule.EnforcingGateways;
+            InstallOn = rule.InstallOn;
+            Time = rule.Time;
+            RuleTimes = rule.RuleTimes;
+            Violations = rule.Violations;
+            Rulebase = rule.Rulebase;
+            LastChangeAdmin = rule.LastChangeAdmin;
+            ParentRule = rule.ParentRule;
+            DisplayOrderNumberString = rule.DisplayOrderNumberString;
             DisplayOrderNumber = rule.DisplayOrderNumber;
             Certified = rule.Certified;
             ManagementName = rule.ManagementName;
             DeviceName = rule.DeviceName;
+            RulebaseName = rule.RulebaseName;
             DisregardedFroms = rule.DisregardedFroms;
             DisregardedTos = rule.DisregardedTos;
             DisregardedServices = rule.DisregardedServices;

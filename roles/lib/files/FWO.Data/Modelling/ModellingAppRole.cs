@@ -1,4 +1,4 @@
-using System.Text.Json.Serialization; 
+using System.Text.Json.Serialization;
 using Newtonsoft.Json;
 using FWO.Basics;
 
@@ -19,14 +19,14 @@ namespace FWO.Data.Modelling
         public List<ModellingAppServerWrapper> AppServers { get; set; } = [];
 
         public ModellingNetworkArea? Area { get; set; } = new();
-        public bool IsMissing = false;
-        public bool HasDifference = false;
+        public bool IsMissing { get; set; } = false;
+        public bool HasDifference { get; set; } = false;
         public List<ModellingAppServerWrapper> SurplusAppServers { get; set; } = [];
-        public string ManagementName = "";
+        public string ManagementName { get; set; } = "";
 
 
         public ModellingAppRole()
-        {}
+        { }
 
         public ModellingAppRole(ModellingAppRole appRole) : base(appRole)
         {
@@ -52,9 +52,9 @@ namespace FWO.Data.Modelling
         protected static List<ModellingAppServerWrapper> ConvertNwObjectsToAppServers(GroupFlat<NetworkObject>[] groupFlats)
         {
             List<ModellingAppServerWrapper> appServers = [];
-            foreach(var obj in groupFlats.Where(x => x.Object?.IP != null && x.Object?.IP != "").ToList())
+            foreach (var obj in groupFlats.Where(x => x.Object?.IP != null && x.Object?.IP != "").Select(o => o.Object))
             {
-                appServers.Add(new ModellingAppServerWrapper(){ Content = obj.Object != null ? new(obj.Object) : new() });
+                appServers.Add(new ModellingAppServerWrapper() { Content = obj != null ? new(obj) : new() });
             }
             return appServers;
         }
@@ -87,14 +87,14 @@ namespace FWO.Data.Modelling
         {
             Group<NetworkObject>[] objectGroups = ModellingAppRoleWrapper.ResolveAppServersAsNetworkObjectGroup(AppServers ?? []);
             GroupFlat<NetworkObject>[] objectGroupFlats = ModellingAppRoleWrapper.ResolveAppServersAsNetworkObjectGroupFlat(AppServers ?? []);
-            
+
             return new()
             {
                 Id = Id,
                 Number = Number,
                 Name = IdAsName ? IdString : Name + " (" + IdString + ")" ?? IdString ?? "",
                 Comment = Comment ?? "",
-                Type = new NetworkObjectType(){ Name = ObjectType.Group },
+                Type = new NetworkObjectType() { Name = ObjectType.Group },
                 ObjectGroups = objectGroups,
                 ObjectGroupFlats = objectGroupFlats,
                 MemberNames = ListMembers ? string.Join("|", Array.ConvertAll(objectGroups, o => o.Object?.Name)) : "..."
@@ -104,12 +104,12 @@ namespace FWO.Data.Modelling
         public override bool Sanitize()
         {
             bool shortened = base.Sanitize();
-            Comment = Sanitizer.SanitizeCommentOpt(Comment, ref shortened);
-            Creator = Sanitizer.SanitizeOpt(Creator, ref shortened);
+            Comment = Comment.SanitizeCommentOpt(ref shortened);
+            Creator = Creator.SanitizeOpt(ref shortened);
             return shortened;
         }
     }
-    
+
     public class ModellingAppRoleWrapper
     {
         [JsonProperty("nwgroup"), JsonPropertyName("nwgroup")]
@@ -122,12 +122,12 @@ namespace FWO.Data.Modelling
 
         public static Group<NetworkObject>[] ResolveAppServersAsNetworkObjectGroup(List<ModellingAppServerWrapper> wrappedList)
         {
-            return Array.ConvertAll(wrappedList.ToArray(), wrapper => new Group<NetworkObject> {Id = wrapper.Content.Id, Object = ModellingAppServer.ToNetworkObject(wrapper.Content)});
+            return Array.ConvertAll(wrappedList.ToArray(), wrapper => new Group<NetworkObject> { Id = wrapper.Content.Id, Object = ModellingAppServer.ToNetworkObject(wrapper.Content) });
         }
-        
+
         public static GroupFlat<NetworkObject>[] ResolveAppServersAsNetworkObjectGroupFlat(List<ModellingAppServerWrapper> wrappedList)
         {
-            return Array.ConvertAll(wrappedList.ToArray(), wrapper => new GroupFlat<NetworkObject> {Id = wrapper.Content.Id, Object = ModellingAppServer.ToNetworkObject(wrapper.Content)});
+            return Array.ConvertAll(wrappedList.ToArray(), wrapper => new GroupFlat<NetworkObject> { Id = wrapper.Content.Id, Object = ModellingAppServer.ToNetworkObject(wrapper.Content) });
         }
     }
 }

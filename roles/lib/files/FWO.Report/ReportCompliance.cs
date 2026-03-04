@@ -1,107 +1,203 @@
+using FWO.Api.Client;
+using FWO.Api.Client.Queries;
 using FWO.Basics;
-using System.Text;
-using FWO.Report.Filter;
 using FWO.Config.Api;
 using FWO.Data;
-using FWO.Api.Client;
-using FWO.Data.Report;
-using FWO.Api.Client.Queries;
-using System.Reflection;
-using System.Text.Json;
 using FWO.Data.Middleware;
+using FWO.Data.Report;
 using FWO.Logging;
-using FWO.Basics.Comparer;
+using FWO.Report.Data.ViewData;
+using FWO.Report.Filter;
+using FWO.Ui.Display;
+using System.Collections.Generic;
+using System.Reflection;
+using System.Text;
+using System.Text.Json;
 
 namespace FWO.Report
 {
-    public class ReportCompliance : ReportRules
+    public class ReportCompliance : ReportBase
     {
-        public List<ComplianceViolation> Violations { get; set; } = [];
-        Dictionary<ComplianceViolation, char> ViolationDiffs = new();
+
+        #region Properties
+
         public List<Rule> Rules { get; set; } = [];
-        public bool IsDiffReport { get; set; } = false;
-        public int DiffReferenceInDays { get; set; } = 0;
+        public List<RuleViewData> RuleViewData = [];
+        public List<ComplianceViolation> Violations { get; set; } = [];
+        public bool ShowNonImpactRules { get; set; }
+        public List<Management> Managements { get; set; } = [];
+        protected virtual string InternalQuery => RuleQueries.getRulesWithCurrentViolationsByChunk;
+        protected DebugConfig DebugConfig;
+        protected readonly GlobalConfig GlobalConfig;
 
-        private readonly bool _includeHeaderInExport;
-        private readonly char _separator;
-        private readonly List<string> _columnsToExport;
-        private readonly DebugConfig _debugConfig;
+        #endregion
 
+        #region Fields
 
+        private List<Device>? _devices;
+        private readonly int _maxDegreeOfParallelism;
+        private readonly SemaphoreSlim _semaphore;
+        private readonly NatRuleDisplayHtml _natRuleDisplayHtml;
+        private List<string> _columnsToExport = [];
+        private bool _includeHeaderInExport;
+        private char _separator;
+        private int _maxCellSize;
+        private readonly int _maxPrintedViolations;
+        private readonly List<int> _relevanteManagementIDs = new();
+
+        #endregion
+
+        #region Constructors
 
         public ReportCompliance(DynGraphqlQuery query, UserConfig userConfig, ReportType reportType) : base(query, userConfig, reportType)
         {
-            _includeHeaderInExport = true;
-            _separator = ';';
-            _columnsToExport = new List<string>
-            {
-                "MgmtId",
-                "Uid",
-                "Name",
-                "Comment",
-                "Source",
-                "Destination",
-                "Services",
-                "Action",
-                "MetaData",
-                "CustomFields",
-                "InstallOn",
-                "Compliance",
-                "ViolationDetails",
-                "ChangeID",
-                "AdoITID"
-            };
+            // Getting config values.
 
-            if (userConfig.GlobalConfig is GlobalConfig globalConfig && !string.IsNullOrEmpty(globalConfig.DebugConfig))
+            if (userConfig.GlobalConfig != null)
             {
-                _debugConfig = JsonSerializer.Deserialize<DebugConfig>(globalConfig.DebugConfig) ?? new();
+                GlobalConfig = userConfig.GlobalConfig;
+            }
+            else
+            {
+                GlobalConfig = new();
+            }
+
+            _maxDegreeOfParallelism = GlobalConfig.ComplianceCheckAvailableProcessors > Environment.ProcessorCount ? Environment.ProcessorCount : GlobalConfig.ComplianceCheckAvailableProcessors;
+            _semaphore = new SemaphoreSlim(_maxDegreeOfParallelism);
+            _natRuleDisplayHtml = new NatRuleDisplayHtml(userConfig);
+
+            // CSV export config.
+
+            SetUpCsvExport();
+
+            _maxPrintedViolations = GlobalConfig.ComplianceCheckMaxPrintedViolations;
+
+            // Apply debug config.
+
+            if (!string.IsNullOrEmpty(GlobalConfig.DebugConfig))
+            {
+                DebugConfig = JsonSerializer.Deserialize<DebugConfig>(GlobalConfig.DebugConfig) ?? new();
             }
             else
             {
                 Log.WriteWarning("Compliance Report", "No debug config found, using default values.");
-
-                _debugConfig = new();
+                DebugConfig = new();
             }
 
+            if (!string.IsNullOrEmpty(GlobalConfig.ComplianceCheckRelevantManagements))
+            {
+                try
+                {
+                    _relevanteManagementIDs = GlobalConfig.ComplianceCheckRelevantManagements
+                        .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                        .Select(s => int.Parse(s.Trim()))
+                        .ToList();
+                }
+                catch (Exception e)
+                {
+                    Log.TryWriteLog(LogType.Error, "Compliance Report", $"Error while parsing relevant mangement IDs: {e.Message}", DebugConfig.ExtendedLogReportGeneration);
+                }
+            }
+        }
+
+        public ReportCompliance(DynGraphqlQuery query, UserConfig userConfig, ReportType reportType, ReportParams reportParams) : this(query, userConfig, reportType)
+        {
+            ShowNonImpactRules = reportParams.ComplianceFilter.ShowNonImpactRules;
+        }
+
+        #endregion
+
+        #region Methods - Overrides
+
+        public override async Task Generate(int elementsPerFetch, ApiConnection apiConnection, Func<ReportData, Task> callback, CancellationToken ct)
+        {
+            // Get management and device info for resolving names.
+
+            await GetManagementAndDevices(apiConnection);
+
+            List<int> managementIds = Managements.Select(mgmt => mgmt.Id).ToList();
+            // Get amount of rules to fetch.
+
+            AggregateCount? result = await apiConnection.SendQueryAsync<AggregateCount>(
+                RuleQueries.countRules,
+                new { mgm_ids = managementIds }
+            );
+            int rulesCount = result?.Aggregate?.Count ?? 0;
+
+            // Get data parallelized.
+            List<Rule>[]? chunks = await GetDataParallelized<Rule>(rulesCount, elementsPerFetch, apiConnection, ct, InternalQuery);
+
+            if (chunks != null)
+            {
+                RuleViewData.Clear();
+                Rules = await ProcessChunksParallelized(chunks, ct, apiConnection);
+                Log.TryWriteLog(LogType.Debug, "Compliance Report", $"Fetched {Rules.Count} rules for compliance report.", DebugConfig.ExtendedLogReportGeneration);
+            }
+            else
+            {
+                Log.TryWriteLog(LogType.Error, "Compliance Report", "Failed to fetch rules for compliance report.", DebugConfig.ExtendedLogReportGeneration);
+                return;
+            }
+
+            // Set report data.
+
+            ReportData.RuleViewData = RuleViewData;
+            ReportData.RulesFlat = Rules;
+            ReportData.ElementsCount = RuleViewData.Count;
+        }
+
+        public override string ExportToJson()
+        {
+            return JsonSerializer.Serialize(ReportData.RuleViewData, new JsonSerializerOptions { WriteIndented = true });
         }
 
         public override string ExportToCsv()
         {
             string csvString = "";
 
-            if (Rules.Count > 0)
+            if (RuleViewData.Count > 0)
             {
-                // Create export string
+                // Create export string.
 
-
-                StringBuilder sb = new StringBuilder();
-                Type type = typeof(Rule);
-                List<PropertyInfo?> properties = _columnsToExport
-                                                    .Select(name => type.GetProperty(name, BindingFlags.Public | BindingFlags.Instance))
-                                                    .Where(p => p != null)
-                                                    .ToList();
-
-                List<string> propertyNames = [];
-
-                foreach (PropertyInfo? propertyInfo in properties)
+                try
                 {
-                    if (propertyInfo != null)
+                    StringBuilder sb = new StringBuilder();
+                    Type type = typeof(RuleViewData);
+                    List<PropertyInfo?> properties = _columnsToExport
+                                                        .Select(name => type.GetProperty(name, BindingFlags.Public | BindingFlags.Instance))
+                                                        .Where(p => p != null)
+                                                        .ToList();
+
+                    List<string> propertyNames = [];
+
+                    foreach (PropertyInfo? propertyInfo in properties)
                     {
-                        propertyNames.Add(propertyInfo!.Name);
+                        if (propertyInfo != null)
+                        {
+                            propertyNames.Add(propertyInfo!.Name);
+                        }
                     }
-                }
 
-                if (_includeHeaderInExport)
+                    TryAppendCsvHeader(sb, propertyNames);
+
+                    foreach (RuleViewData ruleViewData in RuleViewData)
+                    {
+                        // Skip marked (i.e. compliant rules) rules if configured.
+
+                        if (!ShowNonImpactRules && !ruleViewData.Show)
+                        {
+                            continue;
+                        }
+
+                        sb.AppendLine(GetLineForRule(ruleViewData, properties));
+                    }
+
+                    return sb.ToString();
+                }
+                catch (Exception e)
                 {
-                    sb.AppendLine(string.Join(_separator, propertyNames.Select(p => $"\"{p}\"")));
+                    Log.TryWriteLog(LogType.Error, "Compliance Report", $"Error while exporting compliance report to CSV: {e.Message}", DebugConfig.ExtendedLogReportGeneration);
                 }
-
-                foreach (Rule rule in Rules)
-                {
-                    sb.AppendLine(GetLineForRule(rule, properties));
-                }
-
-                return sb.ToString();
             }
 
             return csvString;
@@ -109,218 +205,423 @@ namespace FWO.Report
 
         public override string SetDescription()
         {
-            try
-            {
-                return base.SetDescription();
-            }
-            catch (Exception e)
-            {
-                Log.TryWriteLog(LogType.Error, "Compliance Report", "Error while setting description: " + e.Message, _debugConfig.ExtendedLogReportGeneration);
-                Log.TryWriteLog(LogType.Debug, "Compliance Report", $"Report Data: {JsonSerializer.Serialize(ReportData)}", _debugConfig.ExtendedLogReportGeneration);
+            return "Compliance Report";
+        }
 
-                return "Compliance Report";
+        #endregion
+
+        #region Methods - Public
+
+        public async Task<List<T>[]?> GetDataParallelized<T>(int rulesCount, int elementsPerFetch, ApiConnection apiConnection, CancellationToken ct, string query)
+        {
+            List<Task<List<T>>> tasks = new();
+            List<Dictionary<string, object>> queryVariablesList = new();
+
+            // Create query variables for fetching rules
+
+            for (int offset = 0; offset < rulesCount; offset += elementsPerFetch)
+            {
+                queryVariablesList.Add(CreateQueryVariables(offset, elementsPerFetch, query));
+            }
+
+            // Start fetching tasks
+
+            foreach (Dictionary<string, object> queryVariables in queryVariablesList)
+            {
+                await _semaphore.WaitAsync(ct);
+
+                var task = Task.Run(async () =>
+                {
+                    try
+                    {
+                        return await apiConnection.SendQueryAsync<List<T>>(query, queryVariables);
+                    }
+                    finally
+                    {
+                        _semaphore.Release();
+                    }
+                }, ct);
+
+                tasks.Add(task);
+            }
+
+            // Wait for all tasks to complete and return fetched rules in chunks
+
+            return await Task.WhenAll(tasks);
+        }
+
+        public async Task<List<Rule>> ProcessChunksParallelized(List<Rule>[] chunks, CancellationToken ct, ApiConnection apiConnection)
+        {
+            List<Task<(List<Rule> processed, List<RuleViewData> viewData)>> tasks = new();
+
+            foreach (List<Rule> chunk in chunks)
+            {
+                await _semaphore.WaitAsync(ct);
+
+                Task<(List<Rule>, List<RuleViewData>)> task = Task.Run<(List<Rule>, List<RuleViewData>)>(async () =>
+                {
+                    List<RuleViewData> localViewData = new(chunk.Count);
+
+                    try
+                    {
+                        foreach (var rule in chunk)
+                        {
+                            SetComplianceDataForRule(rule, apiConnection);
+
+                            // Resolve network locations TODO: Move resolving completely to ComplianceCheck or RuleViewData
+
+                            NetworkLocation[] networkLocations = rule.Froms.Concat(rule.Tos).ToArray();
+                            List<NetworkLocation> resolvedNetworkLocations = RuleDisplayBase.GetResolvedNetworkLocations(networkLocations);
+
+                            // Add empty groups because display method does not get them
+
+                            await GatherEmptyGroups(networkLocations, resolvedNetworkLocations);
+                            RuleViewData ruleViewData = new RuleViewData(rule, _natRuleDisplayHtml, OutputLocation.report, ShowRule(rule), _devices ?? [], Managements, rule.Compliance);
+                            localViewData.Add(ruleViewData);
+                        }
+
+                        return (chunk, localViewData);
+                    }
+                    catch (Exception e)
+                    {
+                        Log.TryWriteLog(LogType.Error, "Compliance Report", $"Failed processing chunk: {e.Message}.", DebugConfig.ExtendedLogReportGeneration);
+
+                        return (chunk, localViewData);
+                    }
+                    finally
+                    {
+                        _semaphore.Release();
+                    }
+                }, ct);
+
+                tasks.Add(task);
+            }
+
+            (List<Rule> processed, List<RuleViewData> viewData)[]? results = await Task.WhenAll(tasks);
+
+            return await GatherReportData(results);
+        }
+
+        public async Task GetManagementAndDevices(ApiConnection apiConnection)
+        {
+            // Get management and device info for resolving names.
+
+            List<Management>? managements = await apiConnection.SendQueryAsync<List<Management>>(DeviceQueries.getManagementNames);
+
+            Log.TryWriteLog(LogType.Debug, "Compliance Report", $"Fetched info for {managements?.Count() ?? 0} managements.", DebugConfig.ExtendedLogReportGeneration);
+
+            if (managements != null)
+            {
+                Managements = managements.Where(m => _relevanteManagementIDs.Count == 0 || _relevanteManagementIDs.Contains(m.Id)).ToList(); // filter managements by relevant managements config value
+
+                _devices = new();
+
+                foreach (var management in Managements)
+                {
+                    if (management.Devices != null && management.Devices.Length > 0)
+                    {
+                        _devices.AddRange(management.Devices);
+                    }
+                }
             }
         }
 
-        private string GetLineForRule(Rule rule, List<PropertyInfo?> properties)
+        public void GetViewDataFromRules(List<Rule> rules)
+        {
+            RuleViewData.Clear();
+
+            for (int i = 0; i < rules.Count; i++)
+            {
+                Rule rule = rules.ElementAt(i);
+
+                ComplianceViolationType ruleCompliance = ComplianceViolationType.None;
+
+                if (rule.Violations.Count > 0)
+                {
+                    if (rule.Violations.Any(violation => violation.Type == ComplianceViolationType.NotAssessable))
+                    {
+                        ruleCompliance = ComplianceViolationType.NotAssessable;
+                    }
+                    else if (rule.Violations.Count == 1)
+                    {
+                        // TODO: implement
+
+                        ruleCompliance = ComplianceViolationType.MultipleViolations;
+                    }
+                    else
+                    {
+                        ruleCompliance = ComplianceViolationType.MultipleViolations;
+                    }
+                }
+
+                rule.Compliance = ruleCompliance;
+
+                RuleViewData ruleViewData = new RuleViewData(rule, _natRuleDisplayHtml, OutputLocation.report, ShowRule(rule), _devices ?? [], Managements, ruleCompliance);
+                RuleViewData.Add(ruleViewData);
+            }
+
+        }
+
+
+        #endregion
+
+        #region Methods - Private
+
+        private void SetUpCsvExport()
+        {
+            _includeHeaderInExport = true;
+            _separator = ';';
+            _maxCellSize = 32000; // Max size of a cell in Excel is 32,767 characters.
+            _columnsToExport =
+            [
+                "MgmtId",
+                "MgmtName",
+                "Uid",
+                "Name",
+                "Source"
+            ];
+            if (GlobalConfig.ShowShortColumnsInComplianceReports)
+            {
+                _columnsToExport.Add("SourceShort");
+            }
+            _columnsToExport.Add("Destination");
+            if (GlobalConfig.ShowShortColumnsInComplianceReports)
+            {
+                _columnsToExport.Add("DestinationShort");
+            }
+            _columnsToExport.Add("Services");
+            if (GlobalConfig.ShowShortColumnsInComplianceReports)
+            {
+                _columnsToExport.Add("ServicesShort");
+            }
+            _columnsToExport.AddRange(
+            [
+                "Action",
+                "InstallOn",
+                "Compliance",
+                "ViolationDetails",
+                "ChangeID",
+                "AdoITID",
+                "Comment",
+                "LastModified",
+                "RulebaseId",
+                "RulebaseName",
+                "Enabled"
+            ]);
+        }
+
+        private Task GatherEmptyGroups(NetworkLocation[] networkLocations, List<NetworkLocation> resolvedNetworkLocations)
+        {
+            foreach (NetworkLocation networkLocation in networkLocations)
+            {
+                foreach (GroupFlat<NetworkObject> groupFlat in networkLocation.Object.ObjectGroupFlats)
+                {
+                    if (groupFlat.Object != null && groupFlat.Object.Type.Name == "group" && string.IsNullOrWhiteSpace(groupFlat.Object.MemberRefs))
+                    {
+                        resolvedNetworkLocations.Add(new NetworkLocation(networkLocation.User, groupFlat.Object)); // adding user only for syntax
+                    }
+                }
+            }
+
+            return Task.CompletedTask;
+        }
+
+        private Task<List<Rule>> GatherReportData((List<Rule> processed, List<RuleViewData> viewData)[]? results)
+        {
+            if (results == null)
+            {
+                results = [];
+            }
+            RuleViewData.Capacity = results.Sum(r => r.viewData.Count);
+            List<Rule> processedRulesFlat = new(results.Sum(r => r.processed.Count));
+
+            foreach ((List<Rule> processed, List<RuleViewData> viewData) result in results)
+            {
+                RuleViewData.AddRange(result.viewData);
+                processedRulesFlat.AddRange(result.processed);
+            }
+
+            return Task.FromResult(processedRulesFlat);
+        }
+
+        protected virtual Dictionary<string, object> CreateQueryVariables(int offset, int limit, string query)
+        {
+            Dictionary<string, object> queryVariables = new();
+
+            if (query.Contains(QueryVar.ImportIdStart))
+            {
+                queryVariables[QueryVar.ImportIdStart] = int.MaxValue;
+            }
+
+            if (query.Contains(QueryVar.ImportIdEnd))
+            {
+                queryVariables[QueryVar.ImportIdEnd] = int.MaxValue;
+            }
+
+            if (query.Contains(QueryVar.Offset))
+            {
+                queryVariables[QueryVar.Offset] = offset;
+            }
+
+            if (query.Contains(QueryVar.Limit))
+            {
+                queryVariables[QueryVar.Limit] = limit;
+            }
+
+            if (query.Contains("mgm_ids"))
+            {
+                List<int> managementIds = _relevanteManagementIDs;
+                if (managementIds.Count == 0)
+                {
+                    managementIds = Managements.Select(mgmt => mgmt.Id).ToList();
+                }
+                queryVariables["mgm_ids"] = managementIds;
+            }
+
+            return queryVariables;
+        }
+
+        protected virtual void SetComplianceDataForRule(Rule rule, ApiConnection apiConnection, Func<ComplianceViolation, string>? formatter = null)
+        {
+            try
+            {
+                rule.ViolationDetails = "";
+                rule.Compliance = ComplianceViolationType.None;
+                int addedViolationDetails = 0;
+                List<ComplianceViolation> violations;
+
+                // If rule is not assessable only display assessability issues in details.
+
+                if (rule.Violations.Any(violation => violation.Type == ComplianceViolationType.NotAssessable))
+                {
+                    rule.Compliance = ComplianceViolationType.NotAssessable;
+                    violations = rule.Violations.Where(violation => violation.Type == ComplianceViolationType.NotAssessable).ToList();
+                }
+                else
+                {
+                    violations = rule.Violations.ToList();
+                }
+
+                foreach (ComplianceViolation violation in violations)
+                {
+                    // Cut violation details when printed violations limit is reached.
+
+                    if (_maxPrintedViolations > 0 && addedViolationDetails == _maxPrintedViolations)
+                    {
+                        rule.ViolationDetails += $"<br>Too many violations to display ({rule.Violations.Count}), please check the system for details.";
+                        return;
+                    }
+
+                    // Make line breaks in violation details between violations.
+
+                    if (rule.ViolationDetails != "")
+                    {
+                        rule.ViolationDetails += "<br>";
+                    }
+
+                    // Set rule compliance.
+
+                    if (rule.Compliance != ComplianceViolationType.NotAssessable && addedViolationDetails > 0)
+                    {
+                        rule.Compliance = ComplianceViolationType.MultipleViolations;
+                    }
+                    else
+                    {
+                        rule.Compliance = violation.Type;
+                    }
+
+                    // Add to violation details.
+
+                    string violationDetails = violation.Details;
+
+                    if (formatter != null)
+                    {
+                        violationDetails = formatter(violation);
+                    }
+
+                    rule.ViolationDetails += violationDetails;
+                    addedViolationDetails++;
+                }
+            }
+            catch (Exception e)
+            {
+                Log.TryWriteLog(LogType.Error, "Compliance Report", $"Error while setting compliance data for rule {rule.Id}: {e.Message}", DebugConfig.ExtendedLogReportGeneration);
+                return;
+            }
+        }
+
+        protected virtual bool ShowRule(Rule rule)
+        {
+            bool showRule = true;
+
+            if (rule.Compliance == ComplianceViolationType.None || rule.Action != "accept")
+            {
+                showRule = false;
+            }
+
+            return showRule;
+        }
+
+        private string GetLineForRule(RuleViewData rule, List<PropertyInfo?> properties)
         {
             IEnumerable<string> values = properties.Select(p =>
             {
                 if (p is PropertyInfo propertyInfo)
                 {
-                    return SerializeProperty(propertyInfo, rule);
+                    object? value = propertyInfo.GetValue(rule);
+
+                    if (value is string str)
+                    {
+                        return TransformHtmlToCsv(p.Name, str);
+                    }
                 }
-                
+
                 return "";
             });
 
             return string.Join(_separator, values.Select(value => $"\"{value}\""));
         }
 
-        private string SerializeProperty(PropertyInfo propertyInfo, Rule rule)
+        private string TransformHtmlToCsv(string propertyName, string htmlInput)
         {
-            switch (propertyInfo.Name)
+            if (propertyName == "Enabled")
             {
-                case "Services":
-                    var services = rule.Services.Select(s => s.Content.Name).ToList();
-                    return Escape(string.Join(" | ", services), _separator);
-
-                case "Compliance":
-                    return rule.Compliance switch
-                    {
-                        ComplianceViolationType.NotEvaluable => "NOT EVALUABLE",
-                        ComplianceViolationType.None        => "TRUE",
-                        _                                    => "FALSE"
-                    };
-
-                case "ChangeID":
-                    return GetFromCustomField(rule, "field-1");
-
-                case "AdoITID":
-                    return GetFromCustomField(rule, "field-3");
-
-                default:
-                    var value = propertyInfo.GetValue(rule);
-
-                    if (value == null)
-                        return "";
-
-                    if (value is string s)
-                        return Escape(s, _separator);
-
-                    return Escape(value.ToString()!, _separator);
-            }
-        }
-
-        private string GetFromCustomField(Rule rule, string field)
-        {
-            string customFieldsString = rule.CustomFields.Replace("'", "\"");
-            Dictionary<string, string>? customFields = JsonSerializer.Deserialize<Dictionary<string, string>>(customFieldsString);
-            return customFields != null && customFields.TryGetValue(field, out string? value) ? value : "";
-        }
-
-        private string Escape(string input, char separator)
-        {
-            // Replace line breaks with space
-
-            input = input.Replace("\r", " ").Replace("\n", " ");
-
-            if (input.Contains('"'))
-            {
-                // Escape quotation marks
-
-                input = input.Replace("\"", "\"\"");
-            }
-
-            return input;
-        }
-
-        public override async Task Generate(int rulesPerFetch, ApiConnection apiConnection, Func<ReportData, Task> callback, CancellationToken ct)
-        {
-            var baseTask = base.Generate(rulesPerFetch, apiConnection, callback, ct);
-            var violationsTask = apiConnection.SendQueryAsync<List<ComplianceViolation>>(ComplianceQueries.getViolations); // TODO: move in DynQuery
-
-            await Task.WhenAll(baseTask, violationsTask);
-
-            List<ComplianceViolation> violationsTaskResult = violationsTask.Result;
-            Violations = violationsTaskResult.Where(v => v.RemovedDate == null).ToList();
-
-            if (IsDiffReport && DiffReferenceInDays > 0)
-            {
-                ViolationDiffs = await GetViolationDiffs(violationsTaskResult);
-                Violations = ViolationDiffs.Keys.ToList();
-            }
-
-            await SetComplianceData();
-        }
-
-        public async Task<Dictionary<ComplianceViolation, char>> GetViolationDiffs(List<ComplianceViolation> allViolations)
-        {
-            DateTime referenceDate = DateTime.Now.AddDays(-DiffReferenceInDays);
-
-            Dictionary<ComplianceViolation, char> violationDiffs = new();
-            ComplianceViolationComparer comparer = new();
-
-            List<ComplianceViolation> removedViolations = allViolations
-                                                            .Where(violation => violation.RemovedDate is DateTime removedDate && removedDate >= referenceDate)
-                                                            .Cast<ComplianceViolation>()
-                                                            .ToList();
-
-            List<ComplianceViolation> addedViolations = allViolations
-                                                            .Where(violation => violation.FoundDate >= referenceDate)
-                                                            .Cast<ComplianceViolation>()
-                                                            .ToList();
-
-            foreach (var v in removedViolations)
-            {
-                violationDiffs[v] = '-';
-            }
-
-            foreach (var v in addedViolations)
-            {
-                violationDiffs[v] = '+';
-            }
-
-            return violationDiffs;
-        }
-
-        public async Task SetComplianceData()
-        {
-            Rules.Clear();
-
-            foreach (var management in ReportData.ManagementData)
-            {
-                foreach (var rulebase in management.Rulebases)
+                if (htmlInput.Contains(Icons.Check))
                 {
-                    foreach (var rule in rulebase.Rules)
-                    {
-                        if (rule is Rule currentRule)
-                        {
-                            await SetComplianceDataForRule(currentRule, Violations);
-                        }
-                    }
+                    htmlInput = "TRUE";
+                }
+                else
+                {
+                    htmlInput = "FALSE";
                 }
             }
+
+            htmlInput = htmlInput
+                    .Replace("\r\n", " | ")
+                    .Replace("\n", " | ")
+                    .Replace("<br>", " | ");
+
+            if (htmlInput.Length > _maxCellSize)
+            {
+                htmlInput = htmlInput.Substring(0, _maxCellSize) + " ... (truncated, original length: " + htmlInput.Length + " characters)";
+            }
+
+            return htmlInput;
         }
 
-        private async Task SetComplianceDataForRule(Rule rule, List<ComplianceViolation> violations)
+        private void TryAppendCsvHeader(StringBuilder sb, List<string> propertyNames)
         {
-            rule.Violations.Clear();
-            rule.ViolationDetails = "";
-            rule.Compliance = ComplianceViolationType.None;
-
-            if (await CheckEvaluability(rule))
+            if (_includeHeaderInExport)
             {
-                foreach (var violation in violations.Where(v => v.RuleId == rule.Id))
-                {
-                    if (IsDiffReport && ViolationDiffs.TryGetValue(violation, out char changeSign))
-                    {
-                        violation.Details = $"({changeSign}) {violation.Details}";
-                    }
-
-                    if (rule.ViolationDetails != "")
-                    {
-                        rule.ViolationDetails += "\n";
-                    }
-
-                    rule.ViolationDetails += violation.Details;
-                    rule.Violations.Add(violation);
-
-                    // No need to differentiate between different types of violations here at the moment.
-
-                    rule.Compliance = ComplianceViolationType.MultipleViolations;
-                }                
-            }
-            else
-            {
-                rule.Compliance = ComplianceViolationType.NotEvaluable;
-            }
-
-            if (!Rules.Contains(rule))
-            {
-                Rules.Add(rule);
+                sb.AppendLine(string.Join(_separator, propertyNames.Select(p => $"\"{p}\"")));
             }
         }
 
-        public Task<bool> CheckEvaluability(Rule rule)
+        public override string ExportToHtml()
         {
-            string internetZoneObjectUid = "";
-
-            if (userConfig.GlobalConfig is GlobalConfig globalConfig)
-            {
-                internetZoneObjectUid = globalConfig.ComplianceCheckInternetZoneObject;
-            }
-
-            if (internetZoneObjectUid != "")
-            {
-                return Task.FromResult(!(rule.Froms.Any(from => from.Object.Uid == internetZoneObjectUid) || rule.Tos.Any(to => to.Object.Uid == internetZoneObjectUid)));
-            }
-            else
-            {
-                return Task.FromResult(true);
-            }
-
-            
+            throw new NotImplementedException();
         }
+
+        #endregion
     }
 }

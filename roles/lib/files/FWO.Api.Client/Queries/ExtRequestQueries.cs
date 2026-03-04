@@ -1,4 +1,4 @@
-﻿using FWO.Logging;
+using FWO.Logging;
 
 namespace FWO.Api.Client.Queries
 {
@@ -7,6 +7,7 @@ namespace FWO.Api.Client.Queries
         public static readonly string extRequestDetailsFragment;
 
         public static readonly string addTicketId;
+        public static readonly string getLatestTicketIds;
         public static readonly string getLatestTicketId;
         public static readonly string addExtRequest;
         public static readonly string getOpenRequests;
@@ -28,6 +29,7 @@ namespace FWO.Api.Client.Queries
                 extRequestDetailsFragment = GetQueryText("extRequest/fragments/extRequestDetails.graphql");
 
                 addTicketId = GetQueryText("extRequest/addTicketId.graphql");
+                getLatestTicketIds = GetQueryText("extRequest/getLatestTicketIds.graphql");
                 getLatestTicketId = GetQueryText("extRequest/getLatestTicketId.graphql");
                 addExtRequest = GetQueryText("extRequest/addExtRequest.graphql");
                 getOpenRequests = extRequestDetailsFragment + GetQueryText("extRequest/getOpenRequests.graphql");
@@ -44,7 +46,11 @@ namespace FWO.Api.Client.Queries
             catch (Exception exception)
             {
                 Log.WriteError("Initialize ExtRequestQueries", "Api ExtRequestQueries could not be loaded.", exception);
+#if RELEASE
                 Environment.Exit(-1);
+#else
+                throw;
+#endif
             }
         }
     }

@@ -1,5 +1,7 @@
 using Newtonsoft.Json;
 using System.Text.Json.Serialization;
+using System.Xml.Linq;
+using System.Linq;
 
 namespace FWO.Data.Report
 {
@@ -20,10 +22,36 @@ namespace FWO.Data.Report
         [JsonProperty("rulebases"), JsonPropertyName("rulebases")]
         public RulebaseReport[] Rulebases { get; set; } = [];
 
+        [JsonProperty("changelog_rules"), JsonPropertyName("changelog_rules")]
+        public RuleChange[]? RuleChanges { get; set; }
+
+        [JsonProperty("changelog_objects"), JsonPropertyName("changelog_objects")]
+        public ObjectChange[]? ObjectChanges { get; set; }
+
+        [JsonProperty("changelog_services"), JsonPropertyName("changelog_services")]
+        public ServiceChange[]? ServiceChanges { get; set; }
+
+        [JsonProperty("changelog_users"), JsonPropertyName("changelog_users")]
+        public UserChange[]? UserChanges { get; set; }
+
         [JsonProperty("import"), JsonPropertyName("import")]
         public Import Import { get; set; } = new();
 
+        [JsonProperty("import_controls"), JsonPropertyName("import_controls")]
+        public List<ImportControl> ImportControls { get; set; } = [];
         public long? RelevantImportId { get; set; }
+
+        [JsonProperty("is_super_manager"), JsonPropertyName("is_super_manager")]
+        public bool IsSuperManager { get; set; }
+
+        [JsonProperty("multi_device_manager_id"), JsonPropertyName("multi_device_manager_id")]
+        public int? SuperManagerId { get; set; }
+
+        [JsonProperty("management"), JsonPropertyName("management")]
+        public Management? SuperManager { get; set; }
+
+        [JsonProperty("managementByMultiDeviceManagerId"), JsonPropertyName("managementByMultiDeviceManagerId")]
+        public List<Management> SubManagements { get; set; } = [];
 
         [JsonProperty("networkObjects"), JsonPropertyName("networkObjects")]
         public NetworkObject[] Objects { get; set; } = [];
@@ -33,6 +61,9 @@ namespace FWO.Data.Report
 
         [JsonProperty("userObjects"), JsonPropertyName("userObjects")]
         public NetworkUser[] Users { get; set; } = [];
+
+        [JsonProperty("zoneObjects"), JsonPropertyName("zoneObjects")]
+        public NetworkZone[] Zones { get; set; } = [];
 
         [JsonProperty("reportNetworkObjects"), JsonPropertyName("reportNetworkObjects")]
         public NetworkObject[] ReportObjects { get; set; } = [];
@@ -60,6 +91,9 @@ namespace FWO.Data.Report
         [JsonProperty("rules_aggregate"), JsonPropertyName("rules_aggregate")]
         public ObjectStatistics RuleStatistics { get; set; } = new();
 
+        [JsonProperty("unusedRules_Count"), JsonPropertyName("unusedRules_Count")]
+        public ObjectStatistics UnusedRulesStatistics { get; set; } = new();
+
         public bool Ignore { get; set; }
         public List<long> RelevantObjectIds = [];
         public List<long> HighlightedObjectIds = [];
@@ -67,7 +101,9 @@ namespace FWO.Data.Report
         public bool[] Detailed = [false, false, false]; // nobj, nsrv, user
 
         public ManagementReport()
-        { }
+        {
+            Uid = string.Empty;
+        }
 
 
         public string NameAndDeviceNames(string separator = ", ")
@@ -75,9 +111,76 @@ namespace FWO.Data.Report
             return $"{Name} [{string.Join(separator, Array.ConvertAll(Devices, device => device.Name))}]";
         }
 
+        public string NameAndRulebaseNames(string separator = ", ")
+        {
+            return $"{Name} [{string.Join(separator, Array.ConvertAll(Devices, device => device.Name))}]";
+        }
+
+        /// <summary>
+        /// Conforms <see cref="ManagementReport"/> internal data to be valid for further usage.
+        /// </summary>
+        public void EnforceValidity()
+        {
+            if (UnusedRulesStatistics.ObjectAggregate.ObjectCount >= RuleStatistics.ObjectAggregate.ObjectCount)
+            {
+                UnusedRulesStatistics.ObjectAggregate.ObjectCount = 0;
+            }
+
+            foreach (var device in Devices)
+            {
+                device.EnforceValidity();
+            }
+        }
+
+        public RulebaseReport? GetNextRulebase(RulebaseLink? currentRbLink)
+        {
+            if (currentRbLink == null)
+            {
+                return null;
+            }
+            return Rulebases
+                .FirstOrDefault(rb => rb.Id == currentRbLink.NextRulebaseId);
+        }
+
+        /// <summary>
+        /// Collect all rule ids from contained rulebases.
+        /// </summary>
+        public List<long> GetAllRuleIds()
+        {
+            return Rulebases
+                .SelectMany(rulebase => rulebase.Rules)
+                .Select(rule => rule.Id)
+                .Distinct()
+                .ToList();
+        }
+
     }
     public static class ManagementUtility
     {
+        private static void MergeReportObjects(ManagementReport target, ManagementReport source, Dictionary<string, int> addedCounts, ref bool newObjects)
+        {
+            if (target.ReportObjects != null && source.ReportObjects != null && source.ReportObjects.Length > 0)
+            {
+                target.ReportObjects = target.ReportObjects.Concat(source.ReportObjects).ToArray();
+                newObjects = true;
+                addedCounts["ReportObjects"] = source.ReportObjects.Length;
+            }
+
+            if (target.ReportServices != null && source.ReportServices != null && source.ReportServices.Length > 0)
+            {
+                target.ReportServices = target.ReportServices.Concat(source.ReportServices).ToArray();
+                newObjects = true;
+                addedCounts["ReportServices"] = source.ReportServices.Length;
+            }
+
+            if (target.ReportUsers != null && source.ReportUsers != null && source.ReportUsers.Length > 0)
+            {
+                target.ReportUsers = target.ReportUsers.Concat(source.ReportUsers).ToArray();
+                newObjects = true;
+                addedCounts["ReportUsers"] = source.ReportUsers.Length;
+            }
+        }
+
         public static (bool, Dictionary<string, int>) Merge(this List<ManagementReport> managementReports, List<ManagementReport> managementReportsToMerge)
         {
             bool newObjects = false;
@@ -88,12 +191,15 @@ namespace FWO.Data.Report
                 { "NetworkUsers", 0 },
                 { "Rules", 0 },
                 { "RuleChanges", 0 },
+                { "ObjectChanges", 0 },
+                { "ServiceChanges", 0 },
+                { "UserChanges", 0 },
             };
 
-            foreach(var managementReportToMerge in managementReportsToMerge)
+            foreach (var managementReportToMerge in managementReportsToMerge)
             {
                 ManagementReport? mgmtToFill = managementReports.FirstOrDefault(m => m.Id == managementReportToMerge.Id);
-                if(mgmtToFill!= null)
+                if (mgmtToFill != null)
                 {
                     (bool newObjs, Dictionary<string, int> addedCounts) = mgmtToFill.Merge(managementReportToMerge);
                     if (newObjs)
@@ -104,13 +210,16 @@ namespace FWO.Data.Report
                         maxAddedCounts["NetworkUsers"] = Math.Max(maxAddedCounts["NetworkUsers"], addedCounts["NetworkUsers"]);
                         maxAddedCounts["Rules"] = Math.Max(maxAddedCounts["Rules"], addedCounts["Rules"]);
                         maxAddedCounts["RuleChanges"] = Math.Max(maxAddedCounts["RuleChanges"], addedCounts["RuleChanges"]);
+                        maxAddedCounts["ObjectChanges"] = Math.Max(maxAddedCounts["ObjectChanges"], addedCounts["ObjectChanges"]);
+                        maxAddedCounts["ServiceChanges"] = Math.Max(maxAddedCounts["ServiceChanges"], addedCounts["ServiceChanges"]);
+                        maxAddedCounts["UserChanges"] = Math.Max(maxAddedCounts["UserChanges"], addedCounts["UserChanges"]);
                     }
                 }
             }
             return (newObjects, maxAddedCounts);
         }
 
-        public static (bool, Dictionary<string, int>) Merge(this ManagementReport managementReport, ManagementReport managementToMerge)
+        public static (bool, Dictionary<string, int>) Merge(this ManagementReport managementReport, ManagementReport managementReportToMerge)
         {
             bool newObjects = false;
             Dictionary<string, int> maxAddedCounts = new()
@@ -120,87 +229,46 @@ namespace FWO.Data.Report
                 { "NetworkUsers", 0 },
                 { "Rules", 0 },
                 { "RuleChanges", 0 },
+                { "ObjectChanges", 0 },
+                { "ServiceChanges", 0 },
+                { "UserChanges", 0 },
             };
 
-            if (managementReport.Objects != null && managementToMerge.Objects != null && managementToMerge.Objects.Length > 0)
+            T[] MergeArray<T>(T[]? target, T[]? source, string key)
             {
-                managementReport.Objects = [.. managementReport.Objects, .. managementToMerge.Objects];
-                newObjects = true;
-                maxAddedCounts["NetworkObjects"] = managementToMerge.Objects.Length;
-            }
-
-            if (managementReport.Services != null && managementToMerge.Services != null && managementToMerge.Services.Length > 0)
-            {
-                managementReport.Services = [.. managementReport.Services, .. managementToMerge.Services];
-                newObjects = true;
-                maxAddedCounts["NetworkServices"] = managementToMerge.Services.Length;
-            }
-
-            if (managementReport.Users != null && managementToMerge.Users != null && managementToMerge.Users.Length > 0)
-            {
-                managementReport.Users = [.. managementReport.Users, .. managementToMerge.Users];
-                newObjects = true;
-                maxAddedCounts["NetworkUsers"] = managementToMerge.Users.Length;
-            }
-
-            if (managementReport.Devices != null && managementToMerge.Devices != null && managementToMerge.Devices.Length > 0)
-            {
-                // important: if any management still returns rules, newObjects is set to true
-                (bool newObjs, Dictionary<string, int> addedDeviceCounts) = managementReport.Devices.Merge(managementToMerge.Devices);
-                if (newObjs)
+                if (source != null && source.Length > 0)
                 {
+                    target ??= Array.Empty<T>(); // sicherstellen, dass target nicht null ist
                     newObjects = true;
-                    maxAddedCounts["Rules"] = addedDeviceCounts["Rules"];
-                    maxAddedCounts["RuleChanges"] = addedDeviceCounts["RuleChanges"];
+                    maxAddedCounts[key] = Math.Max(maxAddedCounts[key], source.Length);
+                    return [.. target, .. source];
+                }
+                return target ?? Array.Empty<T>(); // falls target null, leeres Array zurückgeben
+            }
+
+            managementReport.Objects = MergeArray(managementReport.Objects, managementReportToMerge.Objects, "NetworkObjects");
+            managementReport.Services = MergeArray(managementReport.Services, managementReportToMerge.Services, "NetworkServices");
+            managementReport.Users = MergeArray(managementReport.Users, managementReportToMerge.Users, "NetworkUsers");
+            managementReport.RuleChanges = MergeArray(managementReport.RuleChanges, managementReportToMerge.RuleChanges, "RuleChanges");
+            managementReport.ObjectChanges = MergeArray(managementReport.ObjectChanges, managementReportToMerge.ObjectChanges, "ObjectChanges");
+            managementReport.ServiceChanges = MergeArray(managementReport.ServiceChanges, managementReportToMerge.ServiceChanges, "ServiceChanges");
+            managementReport.UserChanges = MergeArray(managementReport.UserChanges, managementReportToMerge.UserChanges, "UserChanges");
+
+            MergeReportObjects(managementReport, managementReportToMerge, maxAddedCounts, ref newObjects);
+
+            foreach (RulebaseReport rulebaseReport in managementReport.Rulebases)
+            {
+                if (!managementReportToMerge.Rulebases.Any(rbr => rbr.Id == rulebaseReport.Id))
+                    throw new NotSupportedException("Cannot merge ManagementReports with different Rulebases.");
+                RulebaseReport rulebaseReportToMerge = managementReportToMerge.Rulebases.First(rbr => rbr.Id == rulebaseReport.Id);
+                if (rulebaseReportToMerge.Rules.Length > 0)
+                {
+                    rulebaseReport.Rules = [.. rulebaseReport.Rules, .. rulebaseReportToMerge.Rules];
+                    newObjects = true;
+                    maxAddedCounts["Rules"] = Math.Max(maxAddedCounts["Rules"], rulebaseReportToMerge.Rules.Length);
                 }
             }
-            return (newObjects, maxAddedCounts);
-        }
 
-        public static (bool, Dictionary<string, int>) MergeReportObjects(this ManagementReport managementReport, ManagementReport managementReportToMerge)
-        {
-            bool newObjects = false;
-            Dictionary<string, int> maxAddedCounts = new()
-            {
-                { "ReportObjects", 0 },
-                { "ReportServices", 0 },
-                { "ReportUsers", 0 },
-                { "Rules", 0 },
-                { "RuleChanges", 0 },
-            };
-
-            if (managementReport.ReportObjects != null && managementReportToMerge.ReportObjects != null && managementReportToMerge.ReportObjects.Length > 0)
-            {
-                managementReport.ReportObjects = managementReport.ReportObjects.Concat(managementReportToMerge.ReportObjects).ToArray();
-                newObjects = true;
-                maxAddedCounts["ReportObjects"] = managementReportToMerge.ReportObjects.Length;
-            }
-
-            if (managementReport.ReportServices != null && managementReportToMerge.ReportServices != null && managementReportToMerge.ReportServices.Length > 0)
-            {
-                managementReport.ReportServices = managementReport.ReportServices.Concat(managementReportToMerge.ReportServices).ToArray();
-                newObjects = true;
-                maxAddedCounts["ReportServices"] = managementReportToMerge.ReportServices.Length;
-            }
-
-            if (managementReport.ReportUsers != null && managementReportToMerge.ReportUsers != null && managementReportToMerge.ReportUsers.Length > 0)
-            {
-                managementReport.ReportUsers = managementReport.ReportUsers.Concat(managementReportToMerge.ReportUsers).ToArray();
-                newObjects = true;
-                maxAddedCounts["ReportUsers"] = managementReportToMerge.ReportUsers.Length;
-            }
-
-            if (managementReport.Devices != null && managementReportToMerge.Devices != null && managementReportToMerge.Devices.Length > 0)
-            {
-                // important: if any management still returns rules, newObjects is set to true
-                (bool newObjs, Dictionary<string, int> addedDeviceCounts) = managementReport.Devices.Merge(managementReportToMerge.Devices);
-                if (newObjs)
-                {
-                    newObjects = true;
-                    maxAddedCounts["Rules"] = addedDeviceCounts["RulesPerDeviceMax"];
-                    maxAddedCounts["RuleChanges"] = addedDeviceCounts["RuleChangesPerDeviceMax"];
-                }
-            }
             return (newObjects, maxAddedCounts);
         }
     }

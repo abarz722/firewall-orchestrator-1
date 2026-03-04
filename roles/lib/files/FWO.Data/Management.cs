@@ -1,4 +1,4 @@
-﻿using FWO.Basics;
+using FWO.Basics;
 using Newtonsoft.Json;
 using System.Text.Json.Serialization;
 
@@ -13,7 +13,7 @@ namespace FWO.Data
         public string? ExtName { get; set; }
     }
 
-    public class Management
+    public sealed class Management
     {
         [JsonProperty("id"), JsonPropertyName("id")]
         public int Id { get; set; }
@@ -42,7 +42,7 @@ namespace FWO.Data
         [JsonProperty("cloudTenantId"), JsonPropertyName("cloudTenantId")]
         public string? CloudTenantId { get; set; } = "";
 
-        [JsonProperty("superManager"), JsonPropertyName("superManager")]
+        [JsonProperty("multi_device_manager_id"), JsonPropertyName("multi_device_manager_id")]
         public int? SuperManagerId { get; set; }
 
         [JsonProperty("is_super_manager"), JsonPropertyName("is_super_manager")]
@@ -75,6 +75,21 @@ namespace FWO.Data
         [JsonProperty("rulebases"), JsonPropertyName("rulebases")]
         public Rulebase[] Rulebases { get; set; } = [];
 
+        [JsonProperty("networkObjects"), JsonPropertyName("networkObjects")]
+        public NetworkObject[] Objects { get; set; } = [];
+
+        [JsonProperty("serviceObjects"), JsonPropertyName("serviceObjects")]
+        public NetworkService[] Services { get; set; } = [];
+
+        [JsonProperty("userObjects"), JsonPropertyName("userObjects")]
+        public NetworkUser[] Users { get; set; } = [];
+
+        [JsonProperty("zoneObjects"), JsonPropertyName("zoneObjects")]
+        public NetworkZone[] Zones { get; set; } = [];
+
+        [JsonProperty("timeObjects"), JsonPropertyName("timeObjects")]
+        public TimeObject[] TimeObjects { get; set; } = [];
+
         [JsonProperty("deviceType"), JsonPropertyName("deviceType")]
         public DeviceType DeviceType { get; set; } = new();
 
@@ -99,7 +114,7 @@ namespace FWO.Data
         public long ActionId { get; set; }
 
         public Management()
-        {}
+        { }
 
         public Management(Management management)
         {
@@ -158,19 +173,25 @@ namespace FWO.Data
                    Port == management.Port;
         }
 
-        public virtual bool Sanitize()
+        public bool Sanitize()
         {
             bool shortened = false;
-            Name = Sanitizer.SanitizeMand(Name, ref shortened);
-            Uid = Sanitizer.SanitizeOpt(Uid, ref shortened);
-            Hostname = Sanitizer.SanitizeMand(Hostname, ref shortened);
-            Uid = Sanitizer.SanitizeOpt(Uid, ref shortened);
-            ConfigPath = Sanitizer.SanitizeOpt(ConfigPath, ref shortened);
-            DomainUid = Sanitizer.SanitizeOpt(DomainUid, ref shortened);
-            ImporterHostname = Sanitizer.SanitizeOpt(ImporterHostname, ref shortened);
-            Comment = Sanitizer.SanitizeCommentOpt(Comment, ref shortened);
-            CloudSubscriptionId = Sanitizer.SanitizeOpt(CloudSubscriptionId, ref shortened);
-            CloudTenantId = Sanitizer.SanitizeOpt(CloudTenantId, ref shortened);
+            Name = Name.SanitizeMand(ref shortened);
+            Uid = Uid.SanitizeOpt(ref shortened);
+            Hostname = Hostname.SanitizeMand(ref shortened);
+            ConfigPath = ConfigPath.SanitizeOpt(ref shortened);
+            DomainUid = DomainUid.SanitizeOpt(ref shortened);
+            if (ImporterHostname != null)
+            {
+                ImporterHostname = ImporterHostname.SanitizeMand(ref shortened);
+            }
+            else
+            {
+                ImporterHostname = "";
+            }
+            Comment = Comment.SanitizeCommentOpt(ref shortened);
+            CloudSubscriptionId = CloudSubscriptionId.SanitizeOpt(ref shortened);
+            CloudTenantId = CloudTenantId.SanitizeOpt(ref shortened);
             return shortened;
         }
     }

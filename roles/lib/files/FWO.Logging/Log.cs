@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using FWO.Basics;
+using FWO.Basics.Interfaces;
 
 namespace FWO.Logging
 {
@@ -157,7 +159,7 @@ namespace FWO.Logging
         /// <param name="callerLineNumber">The line number in the source file at which the method is called (automatically supplied).</param>
         public static void WriteAudit(string Title, string Text, bool WithSeparatorLine = true, [CallerMemberName] string callerName = "", [CallerFilePath] string callerFile = "", [CallerLineNumber] int callerLineNumber = 0)
         {
-            if(WithSeparatorLine)
+            if (WithSeparatorLine)
             {
                 Text += $"{Environment.NewLine}----{Environment.NewLine}";
             }
@@ -179,17 +181,17 @@ namespace FWO.Logging
         /// <param name="callerLineNumber">The line number in the source file at which the method is called (automatically supplied).</param>
         public static void WriteAudit(string Title, string Text, string UserName, string UserDN, bool WithSeparatorLine = true, [CallerMemberName] string callerName = "", [CallerFilePath] string callerFile = "", [CallerLineNumber] int callerLineNumber = 0)
         {
-            if(!string.IsNullOrEmpty(UserName))
+            if (!string.IsNullOrEmpty(UserName))
             {
                 Text += $" by User: {UserName}";
             }
 
-            if(!string.IsNullOrEmpty(UserDN))
+            if (!string.IsNullOrEmpty(UserDN))
             {
                 Text += $" (DN: {UserDN})";
             }
 
-            if(WithSeparatorLine)
+            if (WithSeparatorLine)
             {
                 Text += $"{Environment.NewLine}----{Environment.NewLine}";
             }
@@ -216,11 +218,11 @@ namespace FWO.Logging
                 Console.ForegroundColor = (ConsoleColor)ForegroundColor;
             if (BackgroundColor != null)
                 Console.BackgroundColor = (ConsoleColor)BackgroundColor;
-            Console.Out.WriteLine(Text); // TODO: async method ?
+            Console.Out.WriteLine(Text.SanitizeMand()); // TODO: async method ?
             Console.ResetColor();
             semaphore.Release();
         }
-        
+
         public static void TryWriteLog(LogType logType, string title, string text, bool condition)
         {
             if (condition)

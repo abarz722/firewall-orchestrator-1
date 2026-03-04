@@ -1,120 +1,303 @@
-﻿using FWO.Api.Client;
+using FWO.Api.Client;
 using FWO.Api.Client.Queries;
 using FWO.Basics;
+using FWO.Basics.Interfaces;
+using FWO.Basics.Enums;
 using FWO.Config.Api;
 using FWO.Data;
-using FWO.Report;
-using FWO.Services;
 using NetTools;
-using FWO.Data.Report;
-using FWO.Report.Filter.FilterTypes;
-using FWO.Data.Middleware;
-using System.Text.Json;
 using FWO.Logging;
 using FWO.Ui.Display;
+using FWO.Data.Extensions;
+using System.Net;
+using System.Collections.Concurrent;
+using FWO.Services;
 
 namespace FWO.Compliance
 {
+    /// <summary>
+    /// Provides the state and methods required to evaluate how well
+    /// firewall management rules comply with the defined compliance policy.
+    /// 
+    /// The <c>ComplianceCheck</c> class encapsulates the logic used to analyze
+    /// rule configurations, identify deviations from policy requirements,
+    /// and deliver a structured assessment of compliance status.
+    /// </summary>
     public class ComplianceCheck
     {
-        public ReportCompliance? ComplianceReport { get; set; } = null;
+        #region Props & fields
 
-        private ReportFilters _reportFilters = new();
-        private CompliancePolicy? _policy = null;
-        private List<ComplianceNetworkZone> _networkZones = [];
+        /// <summary>
+        /// Active policy that defines the compliance criteria.
+        /// </summary>
+        public CompliancePolicy? Policy = null;
 
-        private readonly List<Rule> _nonEvaluableRules = [];
-        
-        private readonly UserConfig _userConfig;
+        /// <summary>
+        /// Network zones to use for matrix compliance check.
+        /// </summary>
+        public List<ComplianceNetworkZone> NetworkZones { get; set; } = [];
+
+        /// <summary>
+        /// Wraps the static class FWO.Logging.Log to make it accessible for unit tests.
+        /// </summary>
+        public ILogger Logger { get; set; } = new Logger();
+
+        /// <summary>
+        /// Violations found in the last run of CheckAll.
+        /// </summary>
+        public List<ComplianceViolation> CurrentViolationsInCheck { get; private set; } = [];
+
+        /// <summary>
+        /// Rules that are to be evaluated in the next run of CheckAll.
+        /// </summary>
+        public List<Rule>? RulesInCheck { get; set; } = [];
+
+        /// <summary>
+        /// Managements that are the subjects of the check.
+        /// </summary>
+        public List<Management>? Managements { get; set; } = [];
+
+        /// <summary>
+        /// Access to API.
+        /// </summary>
         private readonly ApiConnection _apiConnection;
-        private readonly DebugConfig _debugConfig;
+        /// <summary>
+        /// Access to user config.
+        /// </summary>
+        private readonly UserConfig _userConfig;
 
+        /// <summary>
+        /// Parameter for treating domain and dynamic network objects as part of the auto-calculated internet zone.
+        /// </summary>
+        private bool _treatDomainAndDynamicObjectsAsInternet = false;
+        /// <summary>
+        /// True if the feature auto-calculated internet zone is activated.
+        /// </summary>
+        private bool _autoCalculatedInternetZoneActive = false;
+        /// <summary>
+        /// Id of the compliance policy that is configured for the check.
+        /// </summary>
+        private int _complianceCheckPolicyId = 0;
+        /// <summary>
+        /// Number of elements that are treated as a chunk in parallelized processes
+        /// </summary>
+        private int _elementsPerFetch;
+        /// <summary>
+        /// Limit of threads that may be used for the compliance check.
+        /// </summary>
+        private int _maxDegreeOfParallelism;
+        /// <summary>
+        /// Collection that is suitable for parallel processing and receives and holds insert arguments for newly found violations.
+        /// </summary>
+        private readonly ConcurrentBag<ComplianceViolationBase> _violationsToAdd = new();
+        /// <summary>
+        /// Collection that is suitable for parallel processing and receives and holds remove arguments for deprecated violations.
+        /// </summary>
+        private readonly ConcurrentBag<ComplianceViolation> _violationsToRemove = new();
+        /// <summary>
+        /// Collection that is suitable for parallel processing and receives and holds violations as a result of the current check.
+        /// </summary>
+        private readonly ConcurrentBag<ComplianceViolation> _currentViolations = new();
+        /// <summary>
+        /// Multi-threading helper.
+        /// </summary>
+        private readonly ParallelProcessor _parallelProcessor;
+
+        #endregion
+
+        #region Ctor
 
         /// <summary>
         /// Constructor for compliance check
         /// </summary>
         /// <param name="userConfig">User configuration</param>
         /// <param name="apiConnection">Api connection</param>
-        public ComplianceCheck(UserConfig userConfig, ApiConnection apiConnection)
+        /// <param name="logger">Log</param>
+        public ComplianceCheck(UserConfig userConfig, ApiConnection apiConnection, ILogger? logger = null)
         {
-            _userConfig = userConfig;
             _apiConnection = apiConnection;
+            _userConfig = userConfig;
 
-            if (userConfig.GlobalConfig is GlobalConfig globalConfig && !string.IsNullOrEmpty(globalConfig.DebugConfig))
+            if (logger != null)
             {
-                _debugConfig = JsonSerializer.Deserialize<DebugConfig>(globalConfig.DebugConfig) ?? new();
+                Logger = logger;
             }
-            else
-            {
-                Log.WriteWarning("Compliance Check", "No debug config found, using default values.");
 
-                _debugConfig = new();
+            _parallelProcessor = new(apiConnection, Logger);
+
+            if (_userConfig.GlobalConfig == null)
+            {
+                Logger.TryWriteInfo("Compliance Check", "Global config not found.", _userConfig.GlobalConfig == null);
+            }
+
+        }
+
+        #endregion
+
+        #region Public Methods
+        /// <summary>
+        /// Executes a compliance check based on the provided <see cref="ComplianceCheckType"/>.
+        /// </summary>
+        /// <param name="complianceCheckType"> Specifies the type of compliance check to perform.</param>
+        /// <remarks>
+        /// When <paramref name="complianceCheckType"/> is <see cref="ComplianceCheckType.Variable"/>,
+        /// the method first queries the system for existing violations.
+        /// If no violations are found, the full compliance check is treated as an initial run.
+        /// For <see cref="ComplianceCheckType.Standard"/> or other types,
+        /// a standard full compliance check is performed without the initial flag.
+        /// </remarks>
+        /// <returns>
+        /// A task representing the asynchronous operation.
+        /// </returns>
+        public async Task RunComplianceCheck(ComplianceCheckType complianceCheckType)
+        {
+            switch (complianceCheckType)
+            {
+                case ComplianceCheckType.Variable:
+                    bool isInitial = false;
+                    AggregateCount violationCount = await _apiConnection.SendQueryAsync<AggregateCount>(ComplianceQueries.getViolationCount);
+                    if (violationCount.Aggregate.Count == 0)
+                    {
+                        isInitial = true;
+                    }
+                    await CheckAll(isInitial);
+                    break;
+                case ComplianceCheckType.Standard:
+                default:
+                    await CheckAll();
+                    break;
             }
         }
 
         /// <summary>
-        /// Full compliance check to be called by scheduler
+        /// Retrieves rules with violations from DB, calculates current violations, and prepares diff arguments.
         /// </summary>
-        /// <returns></returns>
-        public async Task CheckAll()
+        /// <param name="managementIds">Management identifiers whose rules should be checked.</param>
+        /// <param name="isInitial">Whether this is part of an initial check</param>
+        /// <returns>List of all rules that have been analyzed.</returns>
+        public async Task<List<Rule>> PerformCheckAsync(List<int> managementIds, bool isInitial = false)
         {
-            try
+            // Getting max import id for query vars.
+
+            long? maxImportId = 0;
+
+
+            Import? import = await _apiConnection.SendQueryAsync<Import>(ImportQueries.getMaxImportId);
+
+            if (import != null && import.ImportAggregate != null && import.ImportAggregate.ImportAggregateMax != null)
             {
-                Log.TryWriteLog(LogType.Info, "Compliance Check", "Starting compliance check", _debugConfig.ExtendedLogComplianceCheck);
+                maxImportId = import.ImportAggregate.ImportAggregateMax.RelevantImportId ?? 0;
 
-                int? policyId = _userConfig.GlobalConfig?.ComplianceCheckPolicyId;
+            }
 
-                if (policyId == null || policyId == 0)
+            // Getting total number of rules, for calculating chunks.
+
+            AggregateCount? result = await _apiConnection.SendQueryAsync<AggregateCount>(
+                RuleQueries.countActiveRules,
+                new { mgm_ids = managementIds }
+            );
+            int activeRulesCount = result?.Aggregate?.Count ?? 0;
+
+            Logger.TryWriteInfo("Compliance Check", $"Loading {activeRulesCount} active rules in chunks of {_elementsPerFetch} for managements: {string.Join(",", managementIds)}.", LocalSettings.ComplianceCheckVerbose);
+
+            // Retrieve rules and check current compliance for every rule.
+
+            _parallelProcessor.SetUp(activeRulesCount, _maxDegreeOfParallelism, _elementsPerFetch);
+
+            List<Rule>[]? chunks = await _parallelProcessor.SendParallelizedQueriesAsync<Rule>(RuleQueries.getRulesForSelectedManagements, CalculateCompliance, managementIds, maxImportId);
+
+            if (chunks == null)
+            {
+                Logger.TryWriteInfo("Compliance Check", $"Chunks could not be loaded from the database.", LocalSettings.ComplianceCheckVerbose);
+                return [];
+            }
+
+            Logger.TryWriteInfo("Compliance Check", $"Attempted to load {chunks.Length} chunks of rules.", LocalSettings.ComplianceCheckVerbose);
+
+            List<Rule>? rules = chunks
+                .SelectMany(rule => rule)
+                .ToList();
+
+            Logger.TryWriteInfo("Compliance Check", $"Loaded {rules.Count} rules.", LocalSettings.ComplianceCheckVerbose);
+
+            CurrentViolationsInCheck = _currentViolations.ToList();
+
+            Logger.TryWriteInfo("Compliance Check", $"Found {CurrentViolationsInCheck.Count} violations.", LocalSettings.ComplianceCheckVerbose);
+
+            Logger.TryWriteInfo("Compliance Check", $"Post-processing {rules.Count} rules.", LocalSettings.ComplianceCheckVerbose);
+
+            // Create diffs and fill argument bags.
+
+            await PostProcessRulesAsync(rules, isInitial);
+
+
+            return rules;
+        }
+
+        /// <summary>
+        /// Creates insert/remove violation lists by comparing DB state with current check results.
+        /// </summary>
+        /// <param name="ruleFromDb">Rules including the violations persisted in the database.</param>
+        /// <param name="isInitial">Whether this is part of an initial check</param>
+        public Task PostProcessRulesAsync(List<Rule> ruleFromDb, bool isInitial = false)
+        {
+            List<(ComplianceViolation Violation, string Key)> dbViolationsWithKeys = ruleFromDb
+                .SelectMany(rule => rule.Violations)
+                .Select(violation => (violation, CreateUniqueViolationKey(violation)))
+                .ToList();
+
+            List<(ComplianceViolation Violation, string Key)> currentViolationsWithKeys = CurrentViolationsInCheck
+                .Select(violation => (violation, CreateUniqueViolationKey(violation)))
+                .ToList();
+
+            HashSet<string> currentKeySet = currentViolationsWithKeys.Select(v => v.Key).ToHashSet(StringComparer.Ordinal);
+            HashSet<string> dbKeySet = dbViolationsWithKeys.Select(v => v.Key).ToHashSet(StringComparer.Ordinal);
+
+            ParallelOptions parallelOptions = new()
+            {
+                MaxDegreeOfParallelism = Math.Max(1, _maxDegreeOfParallelism)
+            };
+
+            // Get remove args.
+
+            Logger.TryWriteInfo("Compliance Check", $"Getting violations to remove.", LocalSettings.ComplianceCheckVerbose);
+
+            _violationsToRemove.Clear();
+
+            Parallel.ForEach(
+                dbViolationsWithKeys,
+                parallelOptions,
+                pair =>
                 {
-                    Log.WriteInfo("Compliance Check", "No Policy defined");
-                    return;
-                }
-                else
-                {
-                    Log.TryWriteLog(LogType.Info, "Compliance Check", $"Using policy {policyId}", _debugConfig.ExtendedLogComplianceCheck);
-                }
-
-                _policy = await _apiConnection.SendQueryAsync<CompliancePolicy>(ComplianceQueries.getPolicyById, new { id = policyId });
-
-                if (TryLogPolicyCriteria() == false)
-                {
-                    Log.WriteError("Compliance Check", $"Policy with id {policyId} not found");
-                    return;
-                }
-
-                Task loadNetworkZonesTask = LoadNetworkZones();
-                Task setUpReportFiltersTask = SetUpReportFilters();
-
-                await Task.WhenAll(loadNetworkZonesTask, setUpReportFiltersTask);
-
-                ReportTemplate template = new("", _reportFilters.ToReportParams());
-
-                ReportBase? currentReport = await ReportGenerator.Generate(template, _apiConnection, _userConfig, DefaultInit.DoNothing);
-
-                if (currentReport is ReportCompliance complianceReport)
-                {
-                    Log.TryWriteLog(LogType.Info, "Compliance Check", $"Compliance report generated with {complianceReport.ReportData.ManagementData.Count} managements", _debugConfig.ExtendedLogComplianceCheck);
-
-                    ComplianceReport = complianceReport;
-
-                    ComplianceReport.Violations.Clear();
-                    _nonEvaluableRules.Clear();
-
-                    foreach (var management in complianceReport.ReportData.ManagementData)
+                    if (!currentKeySet.Contains(pair.Key))
                     {
-                        await CheckRuleCompliancePerManagement(management);
+                        _violationsToRemove.Add(pair.Violation);
                     }
-                }
-                else
+                });
+
+            Logger.TryWriteInfo("Compliance Check", $"Got {_violationsToRemove.Count} violations to remove.", LocalSettings.ComplianceCheckVerbose);
+
+            // Get insert args.
+
+            Logger.TryWriteInfo("Compliance Check", $"Getting violations to insert.", LocalSettings.ComplianceCheckVerbose);
+
+            _violationsToAdd.Clear();
+
+            Parallel.ForEach(
+                currentViolationsWithKeys,
+                parallelOptions,
+                pair =>
                 {
-                    Log.WriteError("Compliance Check", "Could not generate compliance report");
-                }    
-            }
-            catch (System.Exception e)
-            {
-                Log.WriteError("Compliance Check", "Error while checking for compliance violations", e);
-            }
-            
+                    if (!dbKeySet.Contains(pair.Key))
+                    {
+                        ComplianceViolationBase violationBase = ComplianceViolationBase.CreateBase(pair.Violation, isInitial);
+                        _violationsToAdd.Add(violationBase);
+                    }
+                });
+
+            Logger.TryWriteInfo("Compliance Check", $"Got {_violationsToAdd.Count} violations to insert.", LocalSettings.ComplianceCheckVerbose);
+
+            return Task.CompletedTask;
         }
 
         /// <summary>
@@ -124,24 +307,15 @@ namespace FWO.Compliance
         {
             try
             {
-                Log.TryWriteLog(LogType.Info, "Compliance Check", "Persisting violations...", _debugConfig.ExtendedLogComplianceCheck);
+                Logger.TryWriteInfo("Compliance Check", "Persisting violations.", true);
 
-                List<ComplianceViolation> violationsInDb = await _apiConnection.SendQueryAsync<List<ComplianceViolation>>(ComplianceQueries.getViolations);
-
-                // Filter violations by non-valuable rules. If rules are not evaluable their violation status stays datawise the same until they are evaluable again. 
-
-                Task<List<int>> violationsForRemoveTask = GetViolationsForRemove(violationsInDb);
-
-                Log.TryWriteLog(LogType.Info, "Compliance Check", $"Found {violationsInDb.Count} rows in violations db table.", _debugConfig.ExtendedLogComplianceCheck);
-
-                List<ComplianceViolationBase> violations = await CreateViolationInsertObjects(violationsInDb);
-
-                if (violations.Count == 0)
+                if (_violationsToAdd.Count == 0)
                 {
-                    Log.TryWriteLog(LogType.Info, "Compliance Check", "No new violations to persist", _debugConfig.ExtendedLogComplianceCheck);
+                    Logger.TryWriteInfo("Compliance Check", "No new violations to persist.", LocalSettings.ComplianceCheckVerbose);
                 }
                 else
                 {
+                    List<ComplianceViolationBase> violations = _violationsToAdd.ToList();
                     object variablesAdd = new
                     {
                         violations
@@ -149,18 +323,18 @@ namespace FWO.Compliance
 
                     await _apiConnection.SendQueryAsync<dynamic>(ComplianceQueries.addViolations, variablesAdd);
 
-                    Log.TryWriteLog(LogType.Info, "Compliance Check", $"Persisted {violations.Count} new violations", _debugConfig.ExtendedLogComplianceCheck);
+                    Logger.TryWriteInfo("Compliance Check", $"Persisted {_violationsToAdd.Count} new violations.", LocalSettings.ComplianceCheckVerbose);
                 }
 
-                List<int> ids = await violationsForRemoveTask;
+                List<int> ids = _violationsToRemove.Select(violation => violation.Id).ToList();
 
                 if (ids.Count == 0)
                 {
-                    Log.TryWriteLog(LogType.Info, "Compliance Check", "No violations to remove.", _debugConfig.ExtendedLogComplianceCheck);
+                    Logger.TryWriteInfo("Compliance Check", "No violations to remove.", LocalSettings.ComplianceCheckVerbose);
                 }
                 else
                 {
-                    Log.TryWriteLog(LogType.Info, "Compliance Check", $"{ids.Count} violations to remove.", _debugConfig.ExtendedLogComplianceCheck);
+                    Logger.TryWriteInfo("Compliance Check", $"{ids.Count} violations to remove.", LocalSettings.ComplianceCheckVerbose);
 
                     DateTime removedAt = DateTime.UtcNow;
 
@@ -172,25 +346,181 @@ namespace FWO.Compliance
 
                     await _apiConnection.SendQueryAsync<dynamic>(ComplianceQueries.removeViolations, variablesRemove);
 
-                    Log.TryWriteLog(LogType.Info, "Compliance Check", $"Removed {ids.Count} violations", _debugConfig.ExtendedLogComplianceCheck && ids.Count > 0);
+                    Logger.TryWriteInfo("Compliance Check", $"Removed {ids.Count} violations.", LocalSettings.ComplianceCheckVerbose && ids.Count > 0);
                 }
+
+                Logger.TryWriteInfo("Compliance Check", "Persisting of violations completed.", true);
             }
             catch (Exception e)
             {
-                Log.WriteError("Compliance Check", "Error while persisting compliance data", e);
+                Logger.TryWriteError("ComplianceCheck - PersistDataAsync", e, true);
             }
         }
 
         /// <summary>
-        /// Compliance check used in current UI implementation
+        /// Checks whether a rule can be assessed, i.e. contains only evaluable network objects.
         /// </summary>
-        /// <param name="sourceIpRange"></param>
-        /// <param name="destinationIpRange"></param>
-        /// <param name="networkZones"></param>
-        /// <returns></returns>
+        /// <param name="rule">Rule that is currently under test.</param>
+        /// <param name="resolvedSources">Fully resolved source objects.</param>
+        /// <param name="resolvedDestinations">Fully resolved destination objects.</param>
+        /// <param name="criterion">Compliance criterion for assessability.</param>
+        /// <returns>True if the rule can be assessed, otherwise false.</returns>
+        public Task<bool> CheckAssessability(Rule rule, List<NetworkObject> resolvedSources, List<NetworkObject> resolvedDestinations, ComplianceCriterion criterion)
+        {
+            bool isAssessable = true;
+
+            // If treated as part of internet zone dynamic and domain objects are irrelevant for the assessability check.
+
+            resolvedSources = TryFilterDynamicAndDomainObjects(resolvedSources);
+            resolvedDestinations = TryFilterDynamicAndDomainObjects(resolvedDestinations);
+
+            // Check only accept rules for assessability.
+
+            if (rule.Action == "accept")
+            {
+                foreach (NetworkObject networkObject in resolvedSources.Concat(resolvedDestinations))
+                {
+                    // Get assessability issue type if existing.
+
+                    AssessabilityIssue? assessabilityIssue = TryGetAssessabilityIssue(networkObject);
+
+                    if (assessabilityIssue != null)
+                    {
+                        // Create check result object.
+
+                        ComplianceCheckResult complianceCheckResult;
+
+                        if (resolvedSources.Contains(networkObject))
+                        {
+                            complianceCheckResult = new(rule, ComplianceViolationType.NotAssessable)
+                            {
+                                Source = networkObject
+                            };
+                        }
+                        else
+                        {
+                            complianceCheckResult = new(rule, ComplianceViolationType.NotAssessable)
+                            {
+                                Destination = networkObject
+                            };
+                        }
+
+                        complianceCheckResult.AssessabilityIssue = assessabilityIssue;
+                        complianceCheckResult.Criterion = criterion;
+
+                        // Create violation.
+
+                        CreateViolation(ComplianceViolationType.NotAssessable, rule, complianceCheckResult);
+                        isAssessable = false;
+                    }
+                }
+            }
+
+            return Task.FromResult(isAssessable);
+        }
+
+        /// <summary>
+        /// Evaluates a rule against all configured compliance criteria.
+        /// </summary>
+        /// <param name="rule">Rule whose compliance should be checked.</param>
+        /// <param name="criteria">Set of criteria derived from the policy.</param>
+        /// <returns>True if the rule is compliant with every criterion.</returns>
+        public async Task<bool> CheckRuleCompliance(Rule rule, IEnumerable<ComplianceCriterion> criteria)
+        {
+            bool ruleIsCompliant = true;
+
+            if (rule.Action == "accept")
+            {
+                // Resolve network locations
+
+                NetworkLocation[] networkLocations = rule.Froms.Concat(rule.Tos).ToArray();
+                List<NetworkLocation> resolvedNetworkLocations = RuleDisplayBase.GetResolvedNetworkLocations(networkLocations);
+
+                List<NetworkObject> resolvedSources = RuleDisplayBase
+                    .GetResolvedNetworkLocations(rule.Froms)
+                    .Select(from => from.Object)
+                    .ToList();
+
+                List<NetworkObject> resolvedDestinations = RuleDisplayBase
+                    .GetResolvedNetworkLocations(rule.Tos)
+                    .Select(to => to.Object)
+                    .ToList();
+
+                try
+                {
+                    foreach (var criterion in criteria)
+                    {
+                        switch (criterion.CriterionType)
+                        {
+                            case nameof(CriterionType.Assessability):
+                                ruleIsCompliant &= CheckAssessability(rule, resolvedSources, resolvedDestinations, criterion).Result;
+                                break;
+                            case nameof(CriterionType.Matrix):
+                                ruleIsCompliant &= await CheckMatrixCompliance(rule, criterion, resolvedSources, resolvedDestinations);
+                                break;
+                            case nameof(CriterionType.ForbiddenService):
+                                ruleIsCompliant &= CheckForForbiddenService(rule, criterion);
+                                break;
+                            default:
+                                break;
+                        }
+                    }
+                }
+                catch (System.Exception e)
+                {
+                    Logger.TryWriteError("Compliance Check", e, true);
+                }
+
+            }
+
+            return ruleIsCompliant;
+        }
+
+        /// <summary>
+        /// Extracts the IP ranges represented by a network object in all supported forms.
+        /// </summary>
+        /// <param name="networkObject">Network object to parse.</param>
+        /// <returns>List of ranges (empty if parsing is not possible).</returns>
+        public static List<IPAddressRange> ParseIpRange(NetworkObject networkObject)
+        {
+            List<IPAddressRange> ranges = [];
+
+            if (networkObject.Type.Name == ObjectType.IPRange || (networkObject.Type.Name == ObjectType.Network && networkObject.IP.Equals(networkObject.IpEnd) == false))
+            {
+                if (IPAddress.TryParse(networkObject.IP.StripOffNetmask(), out IPAddress? ipStart) && IPAddress.TryParse(networkObject.IpEnd.StripOffNetmask(), out IPAddress? ipEnd))
+                {
+                    ranges.Add(new IPAddressRange(ipStart, ipEnd));
+                }
+            }
+            else if (networkObject.Type.Name != ObjectType.Group && networkObject.ObjectGroupFlats.Length > 0)
+            {
+                for (int j = 0; j < networkObject.ObjectGroupFlats.Length; j++)
+                {
+                    if (networkObject.ObjectGroupFlats[j].Object != null)
+                    {
+                        ranges.AddRange(ParseIpRange(networkObject.ObjectGroupFlats[j].Object!));
+                    }
+                }
+            }
+            else if (networkObject.IP != null)
+            {
+                // CIDR notation or single (host) IP can be parsed directly
+                ranges.Add(IPAddressRange.Parse(networkObject.IP));
+            }
+
+            return ranges;
+        }
+
+        /// <summary>
+        /// Compliance check used in current UI implementation.
+        /// </summary>
+        /// <param name="sourceIpRange">Source range provided by the UI.</param>
+        /// <param name="destinationIpRange">Destination range provided by the UI.</param>
+        /// <param name="networkZones">Network zones to test against the provided ranges.</param>
+        /// <returns>List of forbidden communications found by the matrix check.</returns>
         public List<(ComplianceNetworkZone, ComplianceNetworkZone)> CheckIpRangeInputCompliance(IPAddressRange? sourceIpRange, IPAddressRange? destinationIpRange, List<ComplianceNetworkZone> networkZones)
         {
-            _networkZones = networkZones;
+            NetworkZones = networkZones;
             List<(ComplianceNetworkZone, ComplianceNetworkZone)> forbiddenCommunicationsOutput = [];
 
             if (sourceIpRange != null && destinationIpRange != null)
@@ -206,266 +536,275 @@ namespace FWO.Compliance
             return forbiddenCommunicationsOutput;
         }
 
-        private bool TryLogPolicyCriteria()
+        /// <summary>
+        /// Filters the provided managements so that only the configured IDs remain.
+        /// </summary>
+        /// <param name="globalConfig">Global configuration containing the ID list.</param>
+        /// <param name="managements">All managements retrieved from the API.</param>
+        /// <returns>Subset of managements that are relevant for the compliance check.</returns>
+        public static List<Management> GetRelevantManagements(GlobalConfig globalConfig, List<Management> managements)
         {
-            if (_policy != null)
-            {
-                Log.TryWriteLog(LogType.Info, "Compliance Check", $"Policy criteria: {_policy.Criteria.Count} criteria found", _debugConfig.ExtendedLogComplianceCheck);
+            List<Management>? filteredManagements = [];
+            List<int> relevantManagementIDs = [];
 
-                foreach (var criterion in _policy.Criteria)
+            if (!string.IsNullOrEmpty(globalConfig.ComplianceCheckRelevantManagements))
+            {
+                try
                 {
-                    Log.TryWriteLog(LogType.Info, "Compliance Check", $"Criterion: {criterion.Content.Name} ({criterion.Content.CriterionType})", _debugConfig.ExtendedLogComplianceCheck);
+                    relevantManagementIDs = globalConfig.ComplianceCheckRelevantManagements
+                        .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                        .Select(s => int.Parse(s.Trim()))
+                        .ToList();
+
+                    filteredManagements = managements.Where(m => relevantManagementIDs.Contains(m.Id)).ToList();
+
                 }
-
-                return true;
-            }
-            else
-            {
-                return false;
-            }
-        }
-
-        private async Task LoadNetworkZones()
-        {
-            if (_policy != null)
-            {
-                // ToDo later: work with several matrices?
-                int? matrixId = _policy.Criteria.FirstOrDefault(c => c.Content.CriterionType == CriterionType.Matrix.ToString())?.Content.Id;
-                if (matrixId != null)
+                catch (Exception e)
                 {
-                    _networkZones = await _apiConnection.SendQueryAsync<List<ComplianceNetworkZone>>(ComplianceQueries.getNetworkZonesForMatrix, new { criterionId = matrixId });
-                }
-            }
-        }
-
-        private Task<List<ComplianceViolationBase>> CreateViolationInsertObjects(List<ComplianceViolation> violationsInDb)
-        {
-            List<ComplianceViolationBase> violationsForInsert = [];
-
-            if (ComplianceReport is ReportCompliance complianceReport)
-            {
-                List<ComplianceViolation> currentViolations = violationsInDb
-                    .Where(ev => ev.RemovedDate == null)
-                    .ToList();
-
-                Log.TryWriteLog(LogType.Info, "Compliance Check", $"Found {currentViolations.Count} current (i.e. removed_date == null) violations.", _debugConfig.ExtendedLogComplianceCheck);
-
-                HashSet<string> violationKeys = currentViolations
-                    .Select(ev => $"{ev.RuleId}_{ev.PolicyId}_{ev.CriterionId}_{ev.Details}")
-                    .ToHashSet();
-
-                Log.TryWriteLog(LogType.Info, "Compliance Check", $"Created {currentViolations.Count} unique keys for current violations.", _debugConfig.ExtendedLogComplianceCheck);
-
-                violationsForInsert = complianceReport
-                    .Violations
-                    .Where(v => !violationKeys.Contains($"{v.RuleId}_{v.PolicyId}_{v.CriterionId}_{v.Details}"))
-                    .Select(v => new ComplianceViolationBase
-                    {
-                        RuleId = v.RuleId,
-                        Details = v.Details,
-                        FoundDate = v.FoundDate,
-                        RemovedDate = v.RemovedDate,
-                        RiskScore = v.RiskScore,
-                        PolicyId = v.PolicyId,
-                        CriterionId = v.CriterionId
-                    })
-                    .ToList();
-
-                Log.TryWriteLog(LogType.Info, "Compliance Check", $"Prepared {violationsForInsert.Count} new violations for insert.", _debugConfig.ExtendedLogComplianceCheck);
-            }
-
-            return Task.FromResult(violationsForInsert);
-        }
-
-        private Task<List<int>> GetViolationsForRemove(List<ComplianceViolation> existingViolations)
-        {
-            List<int> violationsForUpdate = [];
-
-            if (ComplianceReport is ReportCompliance complianceReport)
-            {
-                foreach (ComplianceViolation existingViolation in existingViolations.Where(ev => ev.RemovedDate == null).ToList())
-                {
-                    ComplianceViolation? validatedViolation = complianceReport.Violations.FirstOrDefault(v =>
-                                                                v.RuleId == existingViolation.RuleId &&
-                                                                v.PolicyId == existingViolation.PolicyId &&
-                                                                v.CriterionId == existingViolation.CriterionId &&
-                                                                v.Details == existingViolation.Details);
-                                                                
-                    if (validatedViolation == null)
-                    {
-                        violationsForUpdate.Add(existingViolation.Id);
-                    }
+                    Log.TryWriteLog(LogType.Error, "Compliance Report", $"Error while parsing relevant management IDs: {e.Message}", LocalSettings.ComplianceCheckVerbose);
                 }
             }
 
-            return Task.FromResult(violationsForUpdate);
+            return filteredManagements;
         }
+        #endregion
 
-        private async Task CheckRuleCompliancePerManagement(ManagementReport management)
+        #region Private Methods        
+
+        /// <summary>
+        /// Full compliance check
+        /// </summary>
+        /// <returns>Task that completes when the asynchronous compliance evaluation finished.</returns>
+        private async Task CheckAll(bool isInitial = false)
         {
-            int nonCompliantRules = 0;
-            int nonEvaluableRules = 0;
+            DateTime startTime = DateTime.UtcNow;
 
-            Log.TryWriteLog(LogType.Info, "Compliance Check", $"Checking compliance for management {management.Id} '{management.Name}'", _debugConfig.ExtendedLogComplianceCheck);
-
-            foreach (var rulebase in management.Rulebases)
+            try
             {
-                foreach (var rule in rulebase.Rules)
+                // Gathering necessary parameters for compliance check.
+
+                Logger.TryWriteInfo("Compliance Check", "Starting compliance check.", true);
+
+                GlobalConfig? globalConfig = _userConfig.GlobalConfig;
+
+                if (globalConfig == null)
                 {
-                    if (await ComplianceReport!.CheckEvaluability(rule))
-                    {
-                        bool ruleIsCompliant = await CheckRuleCompliance(rule);
-
-                        if (!ruleIsCompliant)
-                        {
-                            nonCompliantRules++;
-                        }
-                    }
-                    else
-                    {
-                        // Set counter
-
-                        nonEvaluableRules++;
-
-                        // Add to control collection
-                        
-                        _nonEvaluableRules.Add(rule);
-                    }
-
-
+                    Logger.TryWriteInfo("Compliance Check", "Global config is necessary for compliance check, but was not found. Aborting compliance check.", true);
+                    return;
                 }
+
+                _complianceCheckPolicyId = globalConfig.ComplianceCheckPolicyId;
+                _autoCalculatedInternetZoneActive = globalConfig.AutoCalculateInternetZone;
+                _treatDomainAndDynamicObjectsAsInternet = globalConfig.TreatDynamicAndDomainObjectsAsInternet;
+                _elementsPerFetch = globalConfig.ComplianceCheckElementsPerFetch;
+                _maxDegreeOfParallelism = globalConfig.ComplianceCheckAvailableProcessors;
+
+                Logger.TryWriteInfo("Compliance Check", $"Parallelizing config: {_elementsPerFetch} elements per fetch and {_maxDegreeOfParallelism} processors.", LocalSettings.ComplianceCheckVerbose);
+
+                if (_complianceCheckPolicyId == 0)
+                {
+                    Logger.TryWriteInfo("Compliance Check", "No Policy defined. Compliance check not possible.", true);
+                    return;
+                }
+
+                Policy = await _apiConnection.SendQueryAsync<CompliancePolicy>(ComplianceQueries.getPolicyById, new { id = _complianceCheckPolicyId });
+
+                if (Policy == null)
+                {
+                    Logger.TryWriteError("Compliance Check", $"Policy with id {_complianceCheckPolicyId} not found.", true);
+                    return;
+                }
+
+                Managements = await _apiConnection.SendQueryAsync<List<Management>>(DeviceQueries.getManagementNames);
+                Managements = GetRelevantManagements(globalConfig, Managements);
+
+                if (Managements == null || Managements.Count == 0)
+                {
+                    Logger.TryWriteInfo("Compliance Check", "No relevant managements found. Compliance check not possible.", true);
+                    return;
+                }
+
+                Logger.TryWriteInfo("Compliance Check", $"Using policy {_complianceCheckPolicyId}", LocalSettings.ComplianceCheckVerbose);
+
+                Logger.TryWriteInfo("Compliance Check", $"Policy criteria: {Policy.Criteria.Count} criteria found.", LocalSettings.ComplianceCheckVerbose);
+
+                if (Policy.Criteria.Count == 0)
+                {
+                    Logger.TryWriteInfo("Compliance Check", $"Policy without criteria. Compliance check not possible.", LocalSettings.ComplianceCheckVerbose);
+                    return;
+                }
+
+                foreach (var criterion in Policy.Criteria)
+                {
+                    Logger.TryWriteInfo("Compliance Check", $"Criterion: {criterion.Content.Name} ({criterion.Content.CriterionType}).", LocalSettings.ComplianceCheckVerbose);
+                }
+
+                // Clear previous check data
+
+                RulesInCheck = [];
+                CurrentViolationsInCheck.Clear();
+                _currentViolations.Clear();
+
+                // Load data for evaluation.
+
+                await LoadNetworkZones();
+
+                // Perform check.
+
+                RulesInCheck = await PerformCheckAsync(Managements!.Select(m => m.Id).ToList(), isInitial);
+
+                if (RulesInCheck == null || RulesInCheck.Count == 0)
+                {
+                    Logger.TryWriteInfo("Compliance Check", "No relevant rules found. Compliance check not possible.", true);
+                    return;
+                }
+
+                TimeSpan elapsed = DateTime.UtcNow - startTime;
+
+                Logger.TryWriteInfo("Compliance Check", $"Compliance check evaluated {RulesInCheck.Count} rules in {elapsed.TotalSeconds} seconds.", true);
+                Logger.TryWriteInfo("Compliance Check", "Compliance check completed.", true);
+
+            }
+            catch (Exception e)
+            {
+                TimeSpan elapsed = DateTime.UtcNow - startTime;
+                Logger.TryWriteInfo("Compliance Check", $"Compliance check failed after {elapsed.TotalSeconds} seconds.", true);
+                Logger.TryWriteError("Compliance Check", e, true);
             }
 
-            Log.TryWriteLog(LogType.Info, "Compliance Check", $"Checked compliance for management {management.Id} '{management.Name}' and found {nonCompliantRules} non-compliant rules", _debugConfig.ExtendedLogComplianceCheck);
-            Log.TryWriteLog(LogType.Info, "Compliance Check", $"Checked compliance for management {management.Id} '{management.Name}' and found {nonEvaluableRules} non-evaluable rules", _debugConfig.ExtendedLogComplianceCheck);
         }
 
-        public async Task<bool> CheckRuleCompliance(Rule rule)
+        /// <summary>
+        /// Performs the matrix compliance check for a rule by mapping resolved objects to zones.
+        /// </summary>
+        /// <param name="rule">Rule under test.</param>
+        /// <param name="criterion">Matrix criterion.</param>
+        /// <param name="resolvedSources">Resolved source objects.</param>
+        /// <param name="resolvedDestinations">Resolved destination objects.</param>
+        private async Task<bool> CheckMatrixCompliance(Rule rule, ComplianceCriterion criterion, List<NetworkObject> resolvedSources, List<NetworkObject> resolvedDestinations)
         {
-            bool ruleIsCompliant = true;
-
-            foreach (var criterion in (_policy?.Criteria ?? []).Select(c => c.Content))
-            {
-                switch (criterion.CriterionType)
-                {
-                    case nameof(CriterionType.Matrix):
-                        ruleIsCompliant &= await CheckAgainstMatrix(rule);
-                        break;
-                    case nameof(CriterionType.ForbiddenService):
-                        ruleIsCompliant &= CheckForForbiddenService(rule, criterion);
-                        break;
-                    default:
-                        break;
-                }
-            }
-
-            return ruleIsCompliant;
-        }
-
-        private async Task<bool> CheckAgainstMatrix(Rule rule)
-        {
-            Task<List<(NetworkObject networkObject, List<IPAddressRange> ipRanges)>> fromsTask = GetNetworkObjectsWithIpRanges([.. rule.Froms.Select(nl => nl.Object)]);
-            Task<List<(NetworkObject networkObject, List<IPAddressRange> ipRanges)>> tosTask = GetNetworkObjectsWithIpRanges([.. rule.Tos.Select(nl => nl.Object)]);
+            Task<List<(NetworkObject networkObject, List<IPAddressRange> ipRanges)>> fromsTask = GetNetworkObjectsWithIpRanges(resolvedSources);
+            Task<List<(NetworkObject networkObject, List<IPAddressRange> ipRanges)>> tosTask = GetNetworkObjectsWithIpRanges(resolvedDestinations);
 
             await Task.WhenAll(fromsTask, tosTask);
 
-            bool ruleIsCompliant = CheckMatrixCompliance(rule, fromsTask.Result, tosTask.Result);
-
-            return ruleIsCompliant;
-        }
-
-        private bool CheckMatrixCompliance(Rule rule, List<(NetworkObject networkObject, List<IPAddressRange> ipRanges)> source, List<(NetworkObject networkObject, List<IPAddressRange> ipRanges)> destination)
-        {
             bool ruleIsCompliant = true;
 
-            List<(NetworkObject networkObject, List<ComplianceNetworkZone> networkZones)> sourceZones = MapZonesToNetworkObjects(source);
-            List<(NetworkObject networkObject, List<ComplianceNetworkZone> networkZones)> destinationZones = MapZonesToNetworkObjects(destination);
+            List<(NetworkObject networkObject, List<ComplianceNetworkZone> networkZones)> sourceZones = MapZonesToNetworkObjects(fromsTask.Result);
+            List<(NetworkObject networkObject, List<ComplianceNetworkZone> networkZones)> destinationZones = MapZonesToNetworkObjects(tosTask.Result);
 
-            foreach ((NetworkObject networkObject, List<ComplianceNetworkZone> networkZones) sourceZone in sourceZones)
+            Dictionary<ComplianceNetworkZone, List<NetworkObject>> sourceObjectsByZone = MapObjectsByZone(sourceZones);
+            Dictionary<ComplianceNetworkZone, List<NetworkObject>> destinationObjectsByZone = MapObjectsByZone(destinationZones);
+
+            foreach ((ComplianceNetworkZone sourceZone, List<NetworkObject> sourceObjects) in sourceObjectsByZone)
             {
-                foreach (ComplianceNetworkZone sourceNetworkZone in sourceZone.networkZones)
+                foreach ((ComplianceNetworkZone destinationZone, List<NetworkObject> destinationObjects) in destinationObjectsByZone)
                 {
-                    foreach ((NetworkObject networkObject, List<ComplianceNetworkZone> networkZones) destinationZone in destinationZones)
+                    if (!sourceZone.CommunicationAllowedTo(destinationZone))
                     {
-                        foreach (ComplianceNetworkZone destinationNetworkZone in destinationZone.networkZones)
+                        ruleIsCompliant = false;
+                        string sourceObjectsString = string.Join(", ", sourceObjects.Select(GetNwObjectString).Distinct());
+                        string destinationObjectsString = string.Join(", ", destinationObjects.Select(GetNwObjectString).Distinct());
+
+                        string details = $"{_userConfig.GetText("H5839")}: {sourceZone.Name} ({sourceObjectsString}) -> {destinationZone.Name} ({destinationObjectsString})";
+
+                        ComplianceCheckResult complianceCheckResult = new(rule, ComplianceViolationType.MatrixViolation)
                         {
-                            if (!sourceNetworkZone.CommunicationAllowedTo(destinationNetworkZone))
-                            {
-                                ComplianceViolation? violation = TryCreateViolation(ComplianceViolationType.MatrixViolation, rule, source: sourceZone.networkObject, destination: destinationZone.networkObject);
+                            Criterion = criterion,
+                            SourceZone = sourceZone,
+                            DestinationZone = destinationZone
+                        };
 
-                                ComplianceReport!.Violations.Add(violation!);
-
-                                ruleIsCompliant = false;
-                            }
-                        }
-                    }                    
+                        CreateViolation(ComplianceViolationType.MatrixViolation, rule, complianceCheckResult, details);
+                    }
                 }
             }
 
             return ruleIsCompliant;
         }
 
-        private ComplianceViolation? TryCreateViolation(ComplianceViolationType violationType, Rule rule, ComplianceCriterion? criterion = null, NetworkObject? source = null, NetworkObject? destination = null, NetworkService? service = null)
+        /// <summary>
+        /// Creates a violation entry from a compliance check result and stores it in the current run buffer.
+        /// </summary>
+        /// <param name="violationType">Type of violation to record.</param>
+        /// <param name="rule">Impacted rule.</param>
+        /// <param name="complianceCheckResult">Details assembled during the check.</param>
+        /// <param name="detailsOverride">Optional string used if details need to be customized.</param>
+        private void CreateViolation(ComplianceViolationType violationType, Rule rule, ComplianceCheckResult complianceCheckResult, string? detailsOverride = null)
         {
             ComplianceViolation violation = new()
             {
                 RuleId = (int)rule.Id,
-                PolicyId = _policy?.Id ?? 0
+                RuleUid = rule.Uid ?? "",
+                MgmtUid = Managements?.FirstOrDefault(m => m.Id == rule.MgmtId)?.Uid ?? "",
+                PolicyId = Policy?.Id ?? 0,
+                CriterionId = complianceCheckResult.Criterion!.Id
             };
 
             switch (violationType)
             {
                 case ComplianceViolationType.MatrixViolation:
 
-                    if (source is NetworkObject s && destination is NetworkObject d)
+                    if (!string.IsNullOrEmpty(detailsOverride))
                     {
-                        // Workaround!! TODO: Check compliance per criterion and transfer criterion id through the methods
-                        violation.CriterionId = _policy?.Criteria
-                                                    .FirstOrDefault(criterionWrapper => criterionWrapper.Content.CriterionType == "Matrix")?
-                                                    .Content.Id ?? 0;
+                        violation.Details = detailsOverride;
+                    }
+                    else if (complianceCheckResult.Source is NetworkObject s && complianceCheckResult.Destination is NetworkObject d)
+                    {
                         string sourceString = GetNwObjectString(s);
                         string destinationString = GetNwObjectString(d);
-                        violation.Details = $"Matrix violation: {sourceString} -> {destinationString}";
-
-                    }
-                    else
-                    {
-                        string nullArgumentExceptionMessage = "Both the 'source' and 'destination' arguments must be non-null when creating a matrix violation.";
-
-                        if (source == null)
-                        {
-                            throw new ArgumentNullException(paramName: "source", message: nullArgumentExceptionMessage);
-                        }
-                        else
-                        {
-                            throw new ArgumentNullException(paramName: "destination", message: nullArgumentExceptionMessage);
-                        }
+                        violation.Details = $"{_userConfig.GetText("H5839")}: {sourceString} (Zone: {complianceCheckResult.SourceZone?.Name ?? ""}) -> {destinationString} (Zone: {complianceCheckResult.DestinationZone?.Name ?? ""})";
                     }
 
                     break;
 
                 case ComplianceViolationType.ServiceViolation:
 
-                    if (service is NetworkService svc)
+                    if (complianceCheckResult.Service is NetworkService svc)
                     {
-                        violation.CriterionId = criterion.Id;
-                        violation.Details = $"Restricted service used: {svc.Name}";
+                        violation.Details = $"{_userConfig.GetText("H5840")}: {svc.Name}";
                     }
                     else
                     {
-                        throw new ArgumentNullException(paramName: "service", message: "The service argument must be non-null when creating a service violation.");
+                        throw new ArgumentNullException(paramName: "complianceCheckResult.Service", message: "The service argument must be non-null when creating a service violation.");
+                    }
+
+                    break;
+
+                case ComplianceViolationType.NotAssessable:
+
+                    if (complianceCheckResult.AssessabilityIssue != null)
+                    {
+                        string networkObject = "";
+
+                        if (complianceCheckResult.Source != null)
+                        {
+                            networkObject = GetNwObjectString(complianceCheckResult.Source);
+                        }
+                        else if (complianceCheckResult.Destination != null)
+                        {
+                            networkObject = GetNwObjectString(complianceCheckResult.Destination);
+                        }
+
+                        string assessabilityIssueType = complianceCheckResult.AssessabilityIssue.Value.ToAssessabilityIssueString();
+
+                        violation.Details = $"{_userConfig.GetText("H5841")}: {_userConfig.GetText(assessabilityIssueType)}({networkObject})";
                     }
 
                     break;
 
                 default:
 
-                    return null;
+                    return;
             }
 
-            return violation;
+            _currentViolations.Add(violation);
         }
 
+        /// <summary>
+        /// Returns a readable representation of a network object including its IP range.
+        /// </summary>
+        /// <param name="networkObject">Network object to display.</param>
         private string GetNwObjectString(NetworkObject networkObject)
         {
             string networkObjectString = "";
@@ -476,12 +815,18 @@ namespace FWO.Compliance
             return networkObjectString;
         }
 
+        /// <summary>
+        /// Checks two IP range sets against the network zone matrix.
+        /// </summary>
+        /// <param name="source">Source ranges.</param>
+        /// <param name="destination">Destination ranges.</param>
+        /// <param name="forbiddenCommunication">Output list of forbidden zone combinations.</param>
         private bool CheckMatrixCompliance(List<IPAddressRange> source, List<IPAddressRange> destination, out List<(ComplianceNetworkZone, ComplianceNetworkZone)> forbiddenCommunication)
         {
             // Determine all matching source zones
             List<ComplianceNetworkZone> sourceZones = DetermineZones(source);
 
-            // Determine all macthing destination zones
+            // Determine all matching destination zones
             List<ComplianceNetworkZone> destinationZones = DetermineZones(destination);
 
             forbiddenCommunication = [];
@@ -497,27 +842,11 @@ namespace FWO.Compliance
             return forbiddenCommunication.Count == 0;
         }
 
-        private async Task SetUpReportFilters()
-        {
-            Log.TryWriteLog(LogType.Info, "Compliance Check", "Setting up report filters for compliance check", _debugConfig.ExtendedLogComplianceCheck);
-
-            _reportFilters = new()
-            {
-                ReportType = ReportType.Compliance
-            };
-
-            _reportFilters.DeviceFilter.Managements = await _apiConnection.SendQueryAsync<List<ManagementSelect>>(DeviceQueries.getDevicesByManagement);
-
-            foreach (var management in _reportFilters.DeviceFilter.Managements)
-            {
-                management.Selected = true;
-                foreach (var device in management.Devices)
-                {
-                    device.Selected = true;
-                }
-            }
-        }
-
+        /// <summary>
+        /// Validates whether a rule uses a service forbidden by the given criterion.
+        /// </summary>
+        /// <param name="rule">Rule that may contain forbidden services.</param>
+        /// <param name="criterion">Criterion defining the restricted service set.</param>
         private bool CheckForForbiddenService(Rule rule, ComplianceCriterion criterion)
         {
             bool ruleIsCompliant = true;
@@ -529,21 +858,24 @@ namespace FWO.Compliance
             {
                 foreach (var service in rule.Services.Where(s => restrictedServices.Contains(s.Content.Uid)))
                 {
-                    ComplianceViolation violation = new()
+                    ComplianceCheckResult complianceCheckResult = new(rule, ComplianceViolationType.ServiceViolation)
                     {
-                        RuleId = (int)rule.Id,
-                        Details = $"Restricted service used: {service.Content.Name}",
-                        CriterionId = criterion.Id,
-                        PolicyId = _policy?.Id ?? 0
+                        Criterion = criterion,
+                        Service = service.Content
                     };
-                    
-                    ComplianceReport!.Violations.Add(violation);
+
+                    CreateViolation(ComplianceViolationType.ServiceViolation, rule, complianceCheckResult);
+                    ruleIsCompliant = false;
                 }
             }
 
             return ruleIsCompliant;
         }
-        
+
+        /// <summary>
+        /// Builds a helper structure combining network objects with the IP ranges they represent.
+        /// </summary>
+        /// <param name="networkObjects">Objects that should be resolved to ranges.</param>
         private static Task<List<(NetworkObject networkObject, List<IPAddressRange> ipRanges)>> GetNetworkObjectsWithIpRanges(List<NetworkObject> networkObjects)
         {
             List<(NetworkObject networkObject, List<IPAddressRange> ipRanges)> networkObjectsWithIpRange = [];
@@ -556,48 +888,168 @@ namespace FWO.Compliance
             return Task.FromResult(networkObjectsWithIpRange);
         }
 
-        private static List<IPAddressRange> ParseIpRange(NetworkObject networkObject)
+
+        /// <summary>
+        /// Loads all network zones referenced by the policy matrix criterion.
+        /// </summary>
+        private async Task LoadNetworkZones()
         {
-            List<IPAddressRange> ranges = [];
-
-            if (networkObject.Type == new NetworkObjectType() { Name = ObjectType.IPRange })
+            if (Policy != null)
             {
-                ranges.Add(IPAddressRange.Parse($"{networkObject.IP}-{networkObject.IpEnd}"));
-            }
-            else if (networkObject.Type != new NetworkObjectType() { Name = ObjectType.Group } && networkObject.ObjectGroupFlats.Length > 0)
-            {
-                for (int j = 0; j < networkObject.ObjectGroupFlats.Length; j++)
+                // ToDo later: work with several matrices?
+                int? matrixId = Policy.Criteria.FirstOrDefault(c => c.Content.CriterionType == CriterionType.Matrix.ToString())?.Content.Id;
+                if (matrixId != null)
                 {
-                    if (networkObject.ObjectGroupFlats[j].Object != null)
-                    {
-                        ranges.AddRange(ParseIpRange(networkObject.ObjectGroupFlats[j].Object!));
-                    }
+                    Logger.TryWriteInfo("Compliance Check", $"Loading network zones for Matrix {matrixId}.", LocalSettings.ComplianceCheckVerbose);
+                    NetworkZones = await _apiConnection.SendQueryAsync<List<ComplianceNetworkZone>>(ComplianceQueries.getNetworkZonesForMatrix, new { criterionId = matrixId });
+                    Logger.TryWriteInfo("Compliance Check", $"Loaded {NetworkZones.Count} network zones for Matrix {matrixId}.", LocalSettings.ComplianceCheckVerbose);
                 }
             }
-            else
-            {
-                if (networkObject.IP != null)
-                {
-                    // CIDR notation or single (host) IP can be parsed directly
-                    ranges.Add(IPAddressRange.Parse(networkObject.IP));
-                }
-            }
-
-            return ranges;
         }
 
+
+        /// <summary>
+        /// Builds a unique key identifying a violation over management, rule, policy, criterion, and detail.
+        /// </summary>
+        private string CreateUniqueViolationKey(ComplianceViolation violation)
+        {
+            string key = "";
+
+            try
+            {
+                key = $"{violation.MgmtUid}_{violation.RuleUid}_{violation.PolicyId}_{violation.CriterionId}_{violation.Details}";
+            }
+            catch (Exception e)
+            {
+                Logger.TryWriteError("Compliance Check", e, true);
+            }
+
+            return key;
+        }
+
+        /// <summary>
+        /// Calculates compliance for all provided rules (or the rules from the last check) and stores violations.
+        /// </summary>
+        /// <param name="rulesToCheck">Explicit set of rules; when null, the rules prepared by <see cref="CheckAll"/> are used.</param>
+        /// <returns>List of rules that have been processed.</returns>
+        public async Task<List<Rule>> CalculateCompliance(List<Rule>? rulesToCheck = null)
+        {
+            List<Rule> rules = rulesToCheck ?? RulesInCheck ?? [];
+
+            int nonCompliantRules = 0;
+            int checkedRules = 0;
+
+            Logger.TryWriteInfo("Compliance Check", $"Checking compliance for {rules.Count} rules.", LocalSettings.ComplianceCheckVerbose);
+
+            if (Policy == null || Policy.Criteria == null)
+            {
+                Logger.TryWriteError("Compliance Check", $"Checking compliance for rules not possible, because criteria could not be loaded.", true);
+                return await Task.FromResult(rules);
+            }
+
+            if (Policy.Criteria.Count == 0)
+            {
+                Logger.TryWriteError("Compliance Check", $"Checking compliance for rules not possible, because policy does not contain criteria.", true);
+                return await Task.FromResult(rules);
+            }
+
+            List<ComplianceCriterion> criteria = Policy.Criteria.Select(c => c.Content).ToList();
+
+            if (criteria.Count == 0)
+            {
+                Logger.TryWriteError("Compliance Check", $"Checking compliance for rules not possible, because criteria were malformed.", true);
+                return await Task.FromResult(rules);
+            }
+
+            Logger.TryWriteInfo("Compliance Check", $"Checking compliance for {Policy.Criteria.Count} criteria.", LocalSettings.ComplianceCheckVerbose);
+
+            foreach (Rule rule in rules)
+            {
+                bool ruleIsCompliant = await CheckRuleCompliance(rule, criteria);
+
+                if (!ruleIsCompliant)
+                {
+                    nonCompliantRules++;
+                }
+
+                checkedRules++;
+            }
+
+            Logger.TryWriteInfo("Compliance Check", $"Checked compliance for {checkedRules} rules and found {nonCompliantRules} non-compliant rules. Total violations: {_currentViolations.Count}.", LocalSettings.ComplianceCheckVerbose);
+            return await Task.FromResult(rules);
+        }
+
+        /// <summary>
+        /// Maps previously resolved IP ranges to their matching compliance zones.
+        /// </summary>
+        /// <param name="inputData">Pairs of network objects and IP ranges.</param>
         private List<(NetworkObject networkObject, List<ComplianceNetworkZone> networkZones)> MapZonesToNetworkObjects(List<(NetworkObject networkObject, List<IPAddressRange> ipRanges)> inputData)
         {
             List<(NetworkObject networkObject, List<ComplianceNetworkZone> networkZones)> map = [];
 
             foreach ((NetworkObject networkObject, List<IPAddressRange> ipRanges) dataItem in inputData)
             {
-                map.Add((dataItem.networkObject, DetermineZones(dataItem.ipRanges)));
+                List<ComplianceNetworkZone> networkZones = [];
+
+                if (_autoCalculatedInternetZoneActive && _treatDomainAndDynamicObjectsAsInternet && (dataItem.networkObject.Type.Name == "dynamic_net_obj" || dataItem.networkObject.Type.Name == "domain"))
+                {
+                    List<ComplianceNetworkZone> complianceNetworkZones = NetworkZones.Where(zone => zone.IsAutoCalculatedInternetZone).ToList();
+
+                    foreach (ComplianceNetworkZone zone in complianceNetworkZones)
+                    {
+                        networkZones.Add(zone);
+                    }
+                }
+                else if (dataItem.ipRanges.Count > 0)
+                {
+                    if (TryGetAssessabilityIssue(dataItem.networkObject) != null)
+                    {
+                        continue;
+                    }
+
+                    networkZones = DetermineZones(dataItem.ipRanges);
+                }
+
+                map.Add((dataItem.networkObject, networkZones));
             }
 
             return map;
         }
 
+        /// <summary>
+        /// Groups network objects by their associated compliance zone.
+        /// </summary>
+        /// <param name="objectsWithZones">Network objects enriched by their zones.</param>
+        private Dictionary<ComplianceNetworkZone, List<NetworkObject>> MapObjectsByZone(List<(NetworkObject networkObject, List<ComplianceNetworkZone> networkZones)> objectsWithZones)
+        {
+            Dictionary<ComplianceNetworkZone, List<NetworkObject>> map = new();
+
+            foreach ((NetworkObject networkObject, List<ComplianceNetworkZone> networkZones) item in objectsWithZones)
+            {
+                if (item.networkZones == null || item.networkZones.Count == 0)
+                {
+                    continue;
+                }
+
+                foreach (ComplianceNetworkZone zone in item.networkZones)
+                {
+                    if (!map.TryGetValue(zone, out List<NetworkObject>? objectsInZone))
+                    {
+                        objectsInZone = [];
+                        map.Add(zone, objectsInZone);
+                    }
+
+                    objectsInZone.Add(item.networkObject);
+                }
+            }
+
+            return map;
+        }
+
+        /// <summary>
+        /// Finds every compliance zone overlapped by the provided IP ranges (plus implicit internet zone when necessary).
+        /// </summary>
+        /// <param name="ranges">Ranges to look up.</param>
         private List<ComplianceNetworkZone> DetermineZones(List<IPAddressRange> ranges)
         {
             List<ComplianceNetworkZone> result = [];
@@ -611,13 +1063,22 @@ namespace FWO.Compliance
                 ]);
             }
 
-            foreach (ComplianceNetworkZone zone in _networkZones.Where(z => z.OverlapExists(ranges, unseenIpAddressRanges)))
+            foreach (ComplianceNetworkZone zone in NetworkZones.Where(z => z.OverlapExists(ranges, unseenIpAddressRanges)))
             {
                 result.Add(zone);
             }
 
+            // No need to proceed if auto calculated internet zone is activated.
+
+            if (_autoCalculatedInternetZoneActive)
+            {
+                return result;
+            }
+
             // Get ip ranges that are not in any zone
+
             List<IPAddressRange> undefinedIpRanges = [.. unseenIpAddressRanges.SelectMany(x => x)];
+
             if (undefinedIpRanges.Count > 0)
             {
                 result.Add
@@ -631,5 +1092,47 @@ namespace FWO.Compliance
 
             return result;
         }
+
+        /// <summary>
+        /// Removes dynamic/domain objects when the feature treats them implicitly as internet.
+        /// </summary>
+        /// <param name="networkObjects">Network objects to filter.</param>
+        private List<NetworkObject> TryFilterDynamicAndDomainObjects(List<NetworkObject> networkObjects)
+        {
+            if (_userConfig.GlobalConfig is GlobalConfig globalConfig && globalConfig.AutoCalculateInternetZone && globalConfig.TreatDynamicAndDomainObjectsAsInternet)
+            {
+                networkObjects = networkObjects
+                    .Where(n => !new List<string> { "domain", "dynamic_net_obj" }.Contains(n.Type.Name))
+                    .ToList();
+            }
+
+            return networkObjects;
+        }
+
+        /// <summary>
+        /// Detects assessability issues (like overly broad objects) for a given network object.
+        /// </summary>
+        /// <param name="networkObject">Network object to evaluate.</param>
+        private AssessabilityIssue? TryGetAssessabilityIssue(NetworkObject networkObject)
+        {
+            if (networkObject.IP == null && networkObject.IpEnd == null)
+                return AssessabilityIssue.IPNull;
+
+            if (networkObject.IP == "0.0.0.0/32" && networkObject.IpEnd == "255.255.255.255/32")
+                return AssessabilityIssue.AllIPs;
+
+            if (networkObject.IP == "::/128" && networkObject.IpEnd == "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff/128")
+                return AssessabilityIssue.AllIPs;
+
+            if (networkObject.IP == "255.255.255.255/32" && networkObject.IpEnd == "255.255.255.255/32")
+                return AssessabilityIssue.Broadcast;
+
+            if (networkObject.IP == "0.0.0.0/32" && networkObject.IpEnd == "0.0.0.0/32")
+                return AssessabilityIssue.HostAddress;
+
+            return null;
+        }
+
+        #endregion
     }
 }

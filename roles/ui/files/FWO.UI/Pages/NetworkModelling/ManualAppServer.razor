@@ -16,7 +16,7 @@
             @if (Display)
             {
                 <button type="button" class="btn btn-sm btn-success mb-2" @onclick="appServerListHandler.CreateAppServer">
-                    @(appServerListHandler.DisplayButton("add_app_server", Icons.Add))
+                    @(DisplayService.DisplayButton(userConfig, "add_app_server", Icons.Add))
                 </button>
                 <div class="vheight75">
                     <Table class="table table-bordered th-bg-secondary table-responsive overflow-auto sticky-header" TableItem="ModellingAppServer"
@@ -29,13 +29,13 @@
                                         @if(context.HighestPrio)
                                         {
                                             <button type="button" class="btn btn-sm btn-success" @onclick="() => appServerListHandler.RequestReactivateAppServer(context)">
-                                                @(appServerListHandler.DisplayButton("reactivate", Icons.Add))
+                                                @(DisplayService.DisplayButton(userConfig, "reactivate", Icons.Add))
                                             </button>
                                         }
                                         @if(!context.InUse)
                                         {
                                             <button type="button" class="btn btn-sm btn-danger" @onclick="() => appServerListHandler.RequestDeleteAppServer(context)">
-                                                @(appServerListHandler.DisplayButton("delete", Icons.Delete))
+                                                @(DisplayService.DisplayButton(userConfig, "delete", Icons.Delete))
                                             </button>
                                         }
                                     }
@@ -44,11 +44,11 @@
                                         @if(!context.ImportSource.StartsWith(GlobalConst.kCSV_))
                                         {
                                             <button type="button" class="btn btn-sm btn-warning" @onclick="() => appServerListHandler.EditAppServer(context)">
-                                                @(appServerListHandler.DisplayButton("edit", Icons.Edit))
+                                                @(DisplayService.DisplayButton(userConfig, "edit", Icons.Edit))
                                             </button>
                                         }
                                         <button type="button" class="btn btn-sm btn-danger" @onclick="() => appServerListHandler.RequestDeleteAppServer(context)">
-                                            @(appServerListHandler.DisplayButton(context.InUse ? "deactivate" : "delete", Icons.Delete))
+                                            @(DisplayService.DisplayButton(userConfig, context.InUse ? "deactivate" : "delete", Icons.Delete))
                                         </button>
                                     }
                                 </div>
@@ -87,9 +87,9 @@
     </PopUp>
     <EditAppServer @bind-Display="appServerListHandler.EditAppServerMode" @bind-AppServerHandler="appServerListHandler.AppServerHandler" />
     <ConfirmDelete @bind-Display="appServerListHandler.DeleteAppServerMode" PerformAction="Delete"
-    Title="@userConfig.GetText("delete_app_server")" DeleteMessage="@appServerListHandler.Message" />
+        Title="@userConfig.GetText("delete_app_server")" DeleteMessage="@appServerListHandler.Message" />
     <Confirm @bind-Display="appServerListHandler.ReactivateAppServerMode" PerformAction="Reactivate"
-    Title="@userConfig.GetText("reactivate")" Message="@appServerListHandler.Message" />
+        Title="@userConfig.GetText("reactivate")" Message="@appServerListHandler.Message" />
 }
 <InProgress Display="workInProgress" />
 
@@ -116,7 +116,7 @@
     {
         try
         {
-            appServerListHandler = new ModellingAppServerListHandler(apiConnection, userConfig, DisplayMessageInUi);
+            appServerListHandler = new ModellingAppServerListHandler(apiConnection, userConfig, DisplayMessageInUi, false, true);
             if (userConfig.ModAppServerTypes != "")
             {
                 appServerTypes = JsonSerializer.Deserialize<List<AppServerType>>(userConfig.ModAppServerTypes) ?? new();

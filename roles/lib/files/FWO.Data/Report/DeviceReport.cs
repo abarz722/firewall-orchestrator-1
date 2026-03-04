@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization; 
+using System.Text.Json.Serialization;
 using Newtonsoft.Json;
 
 namespace FWO.Data.Report
@@ -23,63 +23,66 @@ namespace FWO.Data.Report
         [JsonProperty("rules_aggregate"), JsonPropertyName("rules_aggregate")]
         public ObjectStatistics RuleStatistics { get; set; } = new ObjectStatistics();
 
+        [JsonProperty("unusedRules_Count"), JsonPropertyName("unusedRules_Count")]
+        public ObjectStatistics UnusedRulesStatistics { get; set; } = new();
+
+
+        private List<Rule> Rules = [];
+
+
+        public void SetRulesForDev(List<Rule> rulesToReport)
+        {
+            Rules = rulesToReport;
+        }
+
+        public bool IsLinked(Rule rule)
+        {
+            List<RulebaseLink> activeRulebaseLinks = [.. RulebaseLinks.Where(link => link.GatewayId == Id && link.Removed == null)];
+            return activeRulebaseLinks.Any(link => link.NextRulebaseId == rule.RulebaseId);
+        }
+
         public List<Rule> GetRuleList()
         {
-            // TODO: implement this method to return a list of rules associated with the device
-            return [];
+            return Rules;
+        }
+
+        public DeviceReport()
+        {
+            RulebaseLinks = [];
+        }
+
+        public DeviceReport(DeviceReport deviceReport)
+        {
+            Uid = deviceReport.Uid;
+            Id = deviceReport.Id;
+            Name = deviceReport.Name;
+            RulebaseLinks = deviceReport.RulebaseLinks;
+        }
+
+        public int? GetInitialRulebaseId(ManagementReport managementReport)
+        {
+            return RulebaseLinks.FirstOrDefault(_ => _.IsInitial)?.NextRulebaseId;
         }
 
         public void AddRule(Rule rule)
         {
-            // TODO: implement this method to add a rule to the device
-        }
-        public int GetNumerOfRules()
-        {
-            return 0;
-            // TODO: implement this method to return the numer of rules for this device
+            Rules.Add(rule);
         }
 
-    }
-
-
-    public static class DeviceUtility
-    {
-        // adding rules fetched in slices
-        public static (bool, Dictionary<string, int>) Merge(this DeviceReport[] devices, DeviceReport[] devicesToMerge)
+        public int GetNumberOfRules()
         {
-            bool newObjects = false;
+            return Rules.Count;
+        }
 
-            Dictionary<string, int> addedCounts = new()
+        /// <summary>
+        /// Conforms <see cref="DeviceReport"/> internal data to be valid for further usage.
+        /// </summary>
+        public void EnforceValidity()
+        {
+            if (UnusedRulesStatistics.ObjectAggregate.ObjectCount >= RuleStatistics.ObjectAggregate.ObjectCount)
             {
-                { "Rules", 0 },
-                { "RuleChanges", 0 },
-            };
-
-            // for (int i = 0; i < devices.Length && i < devicesToMerge.Length; i++)
-            // {
-            //     if (devices[i].Id != devicesToMerge[i].Id)
-            //     {
-            //         throw new NotSupportedException("Devices have to be in the same order in oder to merge.");
-            //     }
-
-            //     if (devices[i].Rules != null && devicesToMerge[i].Rules?.Length > 0)
-            //     {
-            //         devices[i].Rules = [.. devices[i].Rules!, .. devicesToMerge[i].Rules!];
-            //         newObjects = true;
-            //         addedCounts["Rules"] = Math.Max(addedCounts["Rules"], devicesToMerge[i].Rules!.Length);
-            //     }
-            //     if (devices[i].RuleChanges != null && devicesToMerge[i].RuleChanges?.Length > 0)
-            //     {
-            //         devices[i].RuleChanges = [.. devices[i].RuleChanges!, .. devicesToMerge[i].RuleChanges!];
-            //         newObjects = true;
-            //         addedCounts["RuleChanges"] = Math.Max(addedCounts["RuleChanges"], devicesToMerge[i].RuleChanges!.Length);
-            //     }
-            //     if (devices[i].RuleStatistics != null && devicesToMerge[i].RuleStatistics != null)
-            //     {
-            //         devices[i].RuleStatistics.ObjectAggregate.ObjectCount += devicesToMerge[i].RuleStatistics.ObjectAggregate.ObjectCount; // TODO: correct ??
-            //     }
-            // }
-            return (newObjects, addedCounts);
+                UnusedRulesStatistics.ObjectAggregate.ObjectCount = 0;
+            }
         }
     }
 }

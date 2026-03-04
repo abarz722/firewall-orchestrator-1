@@ -1,4 +1,4 @@
-﻿using NetTools;
+using NetTools;
 
 namespace FWO.Data
 {
@@ -8,26 +8,26 @@ namespace FWO.Data
 
         public bool Valid { get; set; } = false;
 
-        public string CidrString         
+        public string CidrString
         {
-            get => this.getCidrString();
-            set => this.setCidrFromString(value);
+            get => this.GetCidrString();
+            set => this.SetCidrFromString(value);
         }
 
         public Cidr()
-        {}
+        { }
 
         public Cidr(string value)
         {
-            this.setCidrFromString(value);
+            this.SetCidrFromString(value);
         }
 
-        private string getCidrString()
+        private string GetCidrString()
         {
-            return (Valid ? IpRange.ToCidrString() : "");
+            return Valid ? IpRange.ToCidrString() : "";
         }
 
-        private void setCidrFromString(string value)
+        private void SetCidrFromString(string value)
         {
             try
             {
@@ -38,13 +38,13 @@ namespace FWO.Data
                 {
                     IpRange.GetPrefixLength();
                 }
-                catch(Exception)
+                catch (Exception)
                 {
                     // ignore range end
                     IpRange.End = IpRange.Begin;
                 }
             }
-            catch(Exception)
+            catch (Exception)
             {
                 Valid = false;
             }
@@ -58,6 +58,5 @@ namespace FWO.Data
         {
             return !IsV6();
         }
-        
     }
 }

@@ -13,7 +13,7 @@ namespace FWO.Data
 
         public NetworkLocation(NetworkUser user, NetworkObject? networkObject)
         {
-            Object = networkObject;
+            Object = networkObject ?? new();
             User = user;
         }
 
@@ -22,8 +22,8 @@ namespace FWO.Data
             if (obj is NetworkLocation)
             {
                 NetworkLocation secondNetworkLocation = (obj as NetworkLocation)!;
-                if (this.User != null && secondNetworkLocation.User != null
-                && this.User?.Name.CompareTo(secondNetworkLocation.User?.Name) != 0)
+                if (this.User?.Name != null && secondNetworkLocation.User?.Name != null
+                && this.User.Name.CompareTo(secondNetworkLocation.User.Name) != 0)
                 {
                     return this.User!.Name.CompareTo(secondNetworkLocation.User!.Name);
                 }
@@ -31,9 +31,10 @@ namespace FWO.Data
                 {
                     return this.Object.Name.CompareTo(secondNetworkLocation.Object.Name);
                 }
-                else {
+                else
+                {
                     return 0;
-                } 
+                }
             }
             else
             {

@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization; 
+using System.Text.Json.Serialization;
 using Newtonsoft.Json;
 
 namespace FWO.Data.Workflow
@@ -17,21 +17,21 @@ namespace FWO.Data.Workflow
         [JsonProperty("device_id"), JsonPropertyName("device_id")]
         public int? DeviceId { get; set; }
 
-        public Cidr Cidr { get; set; } = new();
-        public Cidr CidrEnd { get; set; } = new();
+        public Cidr? Cidr { get; set; } = new();
+        public Cidr? CidrEnd { get; set; } = new();
 
 
         public WfReqElement()
-        {}
+        { }
 
-        public WfReqElement(WfReqElement element) : base (element)
+        public WfReqElement(WfReqElement element) : base(element)
         {
             Id = element.Id;
             TaskId = element.TaskId;
             RequestAction = element.RequestAction;
             DeviceId = element.DeviceId;
-            Cidr = new Cidr(element.Cidr != null ? element.Cidr.CidrString : "");
-            CidrEnd = new Cidr(element.CidrEnd != null ? element.CidrEnd.CidrString : "");
+            Cidr = element.Cidr;
+            CidrEnd = element.CidrEnd;
         }
     }
 }

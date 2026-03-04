@@ -8,21 +8,18 @@ fragment ruleOverview on rule {
   rule_comment
   rule_track
   rule_disabled
-  src_zone: zone {
-    zone_name
-    zone_id
-  }
+  rule_from_zones {
+      zone {
+        zone_name
+		zone_id
+      }
+    }
   rule_metadatum {
     rule_metadata_id
     rule_created
     rule_first_hit
     rule_last_hit
-    rule_last_modified
-    rule_last_certified
-    rule_last_certifier_dn
-    rule_to_be_removed
-    rule_decert_date
-    rule_recertification_comment
+    created_import { start_time }
   }
   rule_src_neg
   rule_dst_neg
@@ -35,6 +32,22 @@ fragment ruleOverview on rule {
   rule_name
   rule_custom_fields
   rule_installon
+  rule_time
+  rule_times {
+    rule_time_id
+    rule_id
+    time_obj_id
+    created
+    removed
+    time_object {
+      time_obj_id
+      time_obj_name
+      time_obj_uid
+      start_time
+      end_time
+      created
+    }
+  }
   access_rule
   nat_rule
   xlate_rule
@@ -52,9 +65,11 @@ fragment ruleOverview on rule {
       ...networkObjectOverview
     }
   }
-  dst_zone: zoneByRuleToZone {
-    zone_name
-    zone_id
+  rule_to_zones {
+    zone {
+      zone_name
+      zone_id
+    }
   }
   rule_tos(where: {
     rt_create: { _lte: $import_id_end }

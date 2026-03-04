@@ -1,4 +1,4 @@
-﻿using FWO.Logging;
+using FWO.Logging;
 
 namespace FWO.Api.Client.Queries
 {
@@ -25,6 +25,7 @@ namespace FWO.Api.Client.Queries
         public static readonly string subscribeImportNotifyConfigChanges;
         public static readonly string subscribeVarianceAnalysisConfigChanges;
         public static readonly string subscribeComplianceCheckConfigChanges;
+        public static readonly string subscribeUpdateRuleOwnerMappingConfigChanges;
 
 
         static ConfigQueries()
@@ -52,11 +53,16 @@ namespace FWO.Api.Client.Queries
                 subscribeImportNotifyConfigChanges = GetQueryText("config/subscribeImportNotifyConfigChanges.graphql");
                 subscribeVarianceAnalysisConfigChanges = GetQueryText("config/subscribeVarianceAnalysisConfigChanges.graphql");
                 subscribeComplianceCheckConfigChanges = GetQueryText("config/subscribeComplianceCheckConfigChanges.graphql");
+                subscribeUpdateRuleOwnerMappingConfigChanges = GetQueryText("config/subscribeUpdateRuleOwnerMappingConfigChanges.graphql");
             }
             catch (Exception exception)
             {
                 Log.WriteError("Initialize ConfigQueries", "Api ConfigQueries could not be loaded.", exception);
+#if RELEASE
                 Environment.Exit(-1);
+#else
+                throw;
+#endif
             }
         }
     }

@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization; 
+using System.Text.Json.Serialization;
 using Newtonsoft.Json;
 
 namespace FWO.Data
@@ -11,11 +11,23 @@ namespace FWO.Data
         [JsonProperty("from_rule_id"), JsonPropertyName("from_rule_id")]
         public int? FromRuleId { get; set; }    // nullable for initial rulebase and for fromRulebase links
 
+        [JsonProperty("rule"), JsonPropertyName("rule")]
+        public Rule? FromRule { get; set; }
+
+        [JsonProperty("rulebaseByFromRulebaseId"), JsonPropertyName("rulebaseByFromRulebaseId")]
+        public Rulebase? FromRulebase { get; set; }
+
         [JsonProperty("from_rulebase_id"), JsonPropertyName("from_rulebase_id")]
         public int? FromRulebaseId { get; set; }    // nullable for fromRule links
 
+        [JsonProperty("rulebase"), JsonPropertyName("rulebase")]
+        public Rulebase? ToRulebase { get; set; }
+
         [JsonProperty("link_type"), JsonPropertyName("link_type")]
         public int LinkType { get; set; }
+
+        [JsonProperty("stm_link_type"), JsonPropertyName("stm_link_type")]
+        public LinkType? LinkTypeObj { get; set; }
 
         [JsonProperty("is_initial"), JsonPropertyName("is_initial")]
         public bool IsInitial { get; set; } = false;
@@ -34,12 +46,5 @@ namespace FWO.Data
 
         [JsonProperty("removed"), JsonPropertyName("removed")]
         public long? Removed;
-
-        public bool IsInitialRulebase()
-        {
-            return IsInitial;
-        }
-
     }
-
 }

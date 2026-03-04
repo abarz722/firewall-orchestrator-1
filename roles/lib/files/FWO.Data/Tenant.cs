@@ -1,6 +1,7 @@
-﻿using FWO.Data.Middleware;
+using FWO.Basics;
+using FWO.Data.Middleware;
 using Newtonsoft.Json;
-using System.Text.Json.Serialization; 
+using System.Text.Json.Serialization;
 
 
 namespace FWO.Data
@@ -39,7 +40,7 @@ namespace FWO.Data
 
 
         public Tenant()
-        {}
+        { }
 
         public Tenant(Tenant tenant)
         {
@@ -66,7 +67,7 @@ namespace FWO.Data
             ViewAllDevices = tenantGetParameters.ViewAllDevices;
             List<TenantViewGateway> deviceList = [];
 
-            foreach(int id in VisibleGatewayIds)
+            foreach (int id in VisibleGatewayIds)
             {
                 TenantVisibleGateways = [.. TenantVisibleGateways, new TenantViewGateway(id, "", true)];
             }
@@ -77,9 +78,9 @@ namespace FWO.Data
         public bool Sanitize()
         {
             bool shortened = false;
-            Name = Sanitizer.SanitizeLdapNameMand(Name, ref shortened);
-            Comment = Sanitizer.SanitizeOpt(Comment, ref shortened);
-            Project = Sanitizer.SanitizeOpt(Project, ref shortened);
+            Name = Name.SanitizeLdapNameMand(ref shortened);
+            Comment = Comment.SanitizeOpt(ref shortened);
+            Project = Project.SanitizeOpt(ref shortened);
             return shortened;
         }
 
@@ -112,7 +113,7 @@ namespace FWO.Data
                     tenantGetParams.UnfilteredGateways.Add(new TenantViewGateway(gateway.VisibleGateway.Id, gateway.VisibleGateway.Name ?? "", false));
                 }
             }
-            foreach (var mgm in TenantManagements) 
+            foreach (var mgm in TenantManagements)
             {
                 tenantGetParams.VisibleManagements.Add(new TenantViewManagement(mgm.VisibleManagement.Id, mgm.VisibleManagement.Name ?? ""));
                 if (mgm.Shared)

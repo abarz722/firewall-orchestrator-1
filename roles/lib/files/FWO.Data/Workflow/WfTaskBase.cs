@@ -1,5 +1,6 @@
-﻿using System.Text.Json.Serialization; 
+using FWO.Basics;
 using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace FWO.Data.Workflow
 {
@@ -7,7 +8,7 @@ namespace FWO.Data.Workflow
     {
         master = 0,
         generic = 1,
-        access = 2, 
+        access = 2,
         rule_delete = 3,
         rule_modify = 4,
         group_create = 5,
@@ -90,8 +91,8 @@ namespace FWO.Data.Workflow
         public override bool Sanitize()
         {
             bool shortened = base.Sanitize();
-            Title = Sanitizer.SanitizeMand(Title, ref shortened);
-            FreeText = Sanitizer.SanitizeOpt(FreeText, ref shortened);
+            Title = Title.SanitizeMand(ref shortened);
+            FreeText = FreeText.SanitizeOpt(ref shortened);
             return shortened;
         }
     }

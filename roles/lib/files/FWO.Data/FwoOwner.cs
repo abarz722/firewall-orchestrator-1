@@ -1,5 +1,6 @@
-﻿using System.Text.Json.Serialization; 
+using FWO.Basics;
 using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace FWO.Data
 {
@@ -17,6 +18,9 @@ namespace FWO.Data
         [JsonProperty("criticality"), JsonPropertyName("criticality")]
         public string? Criticality { get; set; }
 
+        [JsonProperty("owner_lifecycle_state_id"), JsonPropertyName("owner_lifecycle_state_id")]
+        public int? OwnerLifeCycleStateId { get; set; }
+
         [JsonProperty("active"), JsonPropertyName("active")]
         public bool Active { get; set; } = true;
 
@@ -29,6 +33,24 @@ namespace FWO.Data
         [JsonProperty("connections_aggregate"), JsonPropertyName("connections_aggregate")]
         public AggregateCount ConnectionCount { get; set; } = new();
 
+        [JsonProperty("last_recertified"), JsonPropertyName("last_recertified")]
+        public DateTime? LastRecertified { get; set; }
+
+        [JsonProperty("last_recertifier"), JsonPropertyName("last_recertifier")]
+        public int? LastRecertifierId { get; set; }
+
+        [JsonProperty("last_recertifier_dn"), JsonPropertyName("last_recertifier_dn")]
+        public string? LastRecertifierDn { get; set; }
+
+        [JsonProperty("next_recert_date"), JsonPropertyName("next_recert_date")]
+        public DateTime? NextRecertDate { get; set; }
+
+        [JsonProperty("recert_active"), JsonPropertyName("recert_active")]
+        public bool RecertActive { get; set; } = false;
+
+        public bool RecertOverdue { get; set; } = false;
+        public bool RecertUpcoming { get; set; } = false;
+        public long? LastRecertId { get; set; }
 
         public FwoOwner()
         { }
@@ -43,6 +65,13 @@ namespace FWO.Data
             ImportSource = owner.ImportSource;
             CommSvcPossible = owner.CommSvcPossible;
             ConnectionCount = owner.ConnectionCount;
+            LastRecertified = owner.LastRecertified;
+            LastRecertifierId = owner.LastRecertifierId;
+            LastRecertifierDn = owner.LastRecertifierDn;
+            NextRecertDate = owner.NextRecertDate;
+            RecertOverdue = owner.RecertOverdue;
+            RecertUpcoming = owner.RecertUpcoming;
+            LastRecertId = owner.LastRecertId;
         }
 
         public string Display(string comSvcTxt)
@@ -52,7 +81,7 @@ namespace FWO.Data
 
             return $"{Name}{appIdPart}";
         }
-        
+
         public string DisplayWithoutAppId(string comSvcTxt)
         {
             if (CommSvcPossible)
@@ -66,14 +95,15 @@ namespace FWO.Data
         public override bool Sanitize()
         {
             bool shortened = base.Sanitize();
-            Criticality = Sanitizer.SanitizeOpt(Criticality, ref shortened);
-            ImportSource = Sanitizer.SanitizeCommentOpt(ImportSource, ref shortened);
+            Criticality = Criticality.SanitizeOpt(ref shortened);
+            ImportSource = ImportSource.SanitizeCommentOpt(ref shortened);
+            LastRecertifierDn = LastRecertifierDn.SanitizeLdapPathOpt(ref shortened);
             return shortened;
         }
 
         public int CompareTo(FwoOwner secondOwner)
         {
-            if(Id <= 0 || secondOwner.Id <= 0)
+            if (Id <= 0 || secondOwner.Id <= 0)
             {
                 return Id.CompareTo(secondOwner.Id);
             }

@@ -10,7 +10,7 @@
             TableClass="table table-bordered table-sm th-bg-secondary table-responsive overflow-auto sticky-header popover-transform" 
             PageSize="RulesPerPage" ColumnReorder="true" TableRowClass="@(r => getTableRowClasses(r))" @ref="reportTable">
 
-        @if (SelectedReportType == ReportType.VarianceAnalysis)
+        @if (SelectedReportType == ReportType.VarianceAnalysis || HandleAsVariance)
         {
             <Column TableItem="Rule" Context="rule" Title="@(userConfig.GetText("management"))" Field="@(r => r.ManagementName)" Sortable="false" Filterable="false" Hideable="true" />
             <Column TableItem="Rule" Context="rule" Title="@(userConfig.GetText("gateway"))" Field="@(r => r.DeviceName)" Sortable="false" Filterable="false" Hideable="true" />
@@ -23,7 +23,7 @@
                 </Template>
             </Column>
         }
-        @if(SelectedReportType == ReportType.UnusedRules || SelectedReportType == ReportType.AppRules)
+        @if(SelectedReportType == ReportType.UnusedRules || SelectedReportType == ReportType.AppRules && !HandleAsVariance)
         {
             <Column TableItem="Rule" Context="rule" Title="@(userConfig.GetText("last_hit"))" Field="@(r => r.Metadata.LastHit)" Sortable="false" Filterable="false">
                 <Template>
@@ -33,7 +33,7 @@
         }
         @if(SelectedReportType == ReportType.Recertification)
         {
-            <Column TableItem="Rule" Context="rule" Title="@(userConfig.GetText("next_recert"))" Field="@(r => r.Metadata.RuleRecertification)" Sortable="false" Filterable="false">
+            <Column TableItem="Rule" Context="rule" Title="@(userConfig.GetText("next_recert_date"))" Field="@(r => r.Metadata.RuleRecertification)" Sortable="false" Filterable="false">
                 <Template>
                     @((MarkupString)RuleDisplayHtml.DisplayNextRecert(rule.Metadata))
                 </Template>
@@ -95,11 +95,11 @@
         }
 
         <Column TableItem="Rule" Title="@(userConfig.GetText("name"))" Field="@(r => r.Name)" Sortable="true" Filterable="false" Hideable="true" />
-        @if (SelectedReportType != ReportType.VarianceAnalysis)
+        @if (SelectedReportType != ReportType.VarianceAnalysis && !HandleAsVariance)
         {
-            <Column TableItem="Rule" Context="rule" Title="@(userConfig.GetText("source_zone"))" Field="@(r => r.SourceZone)" Sortable="true" Filterable="false" Hideable="true">
+            <Column TableItem="Rule" Context="rule" Title="@(userConfig.GetText("source_zone"))" Field="@(r => r.RuleFromZones)" Sortable="true" Filterable="false" Hideable="true">
                 <Template>
-                    @((MarkupString)RuleDisplayBase.DisplaySourceZone(rule))
+                    @((MarkupString)RuleDisplayBase.DisplaySourceZones(rule))
                 </Template>
             </Column>
         }
@@ -108,11 +108,11 @@
                 @((MarkupString)ruleDisplay.DisplaySource(rule, getActLocation(), SelectedReportType))
             </Template>
         </Column>
-        @if (SelectedReportType != ReportType.VarianceAnalysis)
+        @if (SelectedReportType != ReportType.VarianceAnalysis && !HandleAsVariance)
         {
-            <Column TableItem="Rule" Context="rule" Title="@(userConfig.GetText("destination_zone"))" Field="@(r => r.Name)" Sortable="true" Filterable="false" Hideable="true">
+            <Column TableItem="Rule" Context="rule" Title="@(userConfig.GetText("destination_zone"))" Field="@(r => r.RuleToZones)" Sortable="true" Filterable="false" Hideable="true">
                 <Template>
-                    @((MarkupString)RuleDisplayBase.DisplayDestinationZone(rule))
+                    @((MarkupString)RuleDisplayBase.DisplayDestinationZones(rule))
                 </Template>
             </Column>
         }
@@ -161,24 +161,7 @@
         }
 
         <DetailTemplate TableItem="Rule">
-            @if(context.Metadata != null)
-            {
-                <Detail Title="@(userConfig.GetText("created"))" Data="@context.Metadata?.Created?.ToString()" />
-                <Detail Title="@(userConfig.GetText("last_modified"))" Data="@context.Metadata?.LastModified?.ToString()" />
-                <Detail Title="@(userConfig.GetText("first_hit"))" Data="@context.Metadata?.FirstHit?.ToString()" />
-                <Detail Title="@(userConfig.GetText("last_hit"))" Data="@context.Metadata?.LastHit?.ToString()" />
-                <Detail Title="@(userConfig.GetText("last_certify_date"))" Data="@context.Metadata?.LastCertified?.ToString()" />
-                <Detail Title="@(userConfig.GetText("last_recertifier"))" Data="@context.Metadata?.LastCertifierDn?.ToString()" />
-                // <Detail Title="@(userConfig.GetText("marked_to_be_removed"))" Data="@((context.Metadata?.ToBeRemoved)?'yes':'no'))" /> 
-                    // TODO: not able to get this syntactically working, but implicit info is there: ToBeRemoved == NOT DecertificationDate IS NULL
-                <Detail Title="@(userConfig.GetText("decert_date"))" Data="@context.Metadata?.DecertificationDate?.ToString()" />
-                <Detail Title="@(userConfig.GetText("recert_comment"))" Data="@context.Metadata?.Comment?.ToString()" />
-                <Detail Title="@(userConfig.GetText("recert_history"))" Data="@(context.Metadata?.RecertHistory.Count > 0 ? ":" : "")" />
-                @foreach(var recert in context.Metadata!.RecertHistory)
-                {
-                    <Detail Title="@(recert.RecertDate.ToString())" Data="@(getHistoryString(recert))" />
-                }
-            }
+            <RuleDetails Rule="context"/>
         </DetailTemplate>
 
         <CustomRow TableItem="Rule" IsActiveForItem="(r => !String.IsNullOrEmpty(r.SectionHeader))">
@@ -215,6 +198,9 @@
     [Parameter]
     public Rule[]? Rules { get; set; } = [];
     
+    [Parameter]
+    public bool HandleAsVariance { get; set; } = false;
+
 
     private bool RecertificationHistory { get; set; } = false;
     private ITable<Rule>? reportTable;
@@ -232,10 +218,6 @@
         if(rule.SectionHeader != null)
         {
             classes = "hide-all-but-second-child second-child-full-width ";
-        }
-        if(Recertification)
-        {
-            classes += rule.Metadata.Style;
         }
         return classes;
     }

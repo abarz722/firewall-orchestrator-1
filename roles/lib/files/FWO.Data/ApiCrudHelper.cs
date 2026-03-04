@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 using Newtonsoft.Json;
 using FWO.Data;
 
@@ -47,7 +47,7 @@ namespace FWO.Data
     }
 
     public class AggregateCountLastHit
-    // {
+    // NOSONAR - temporarily disabled {
     //     [JsonProperty("device"), JsonPropertyName("device")]
     //     public List<DeviceLastHit> Devices {get; set;} = [];
     // }
@@ -56,11 +56,13 @@ namespace FWO.Data
         [JsonProperty("rulebase_link"), JsonPropertyName("rulebase_link")]
         public List<RulebaseLink> RulebasesOnGateway { get; set; } = [];
     }
+
     public class RulebaseOnGatewaysLastHit
     {
         [JsonProperty("rulebase"), JsonPropertyName("rulebase")]
         public RulebaseLastHit Rulebase { get; set; } = new RulebaseLastHit();
     }
+
     public class RulebaseLastHit
     {
         [JsonProperty("rulesWithHits"), JsonPropertyName("rulesWithHits")]
@@ -77,5 +79,11 @@ namespace FWO.Data
     {
         [JsonProperty("count"), JsonPropertyName("count")]
         public int Count { get; set; }
+    }
+
+    public class DeleteAllViolationsResult
+    {
+        [JsonProperty("affected_rows"), JsonPropertyName("affected_rows")]
+        public int AffectedRows { get; set; }
     }
 }

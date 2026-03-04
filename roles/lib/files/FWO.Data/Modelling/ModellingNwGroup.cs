@@ -1,4 +1,4 @@
-using System.Text.Json.Serialization; 
+using System.Text.Json.Serialization;
 using Newtonsoft.Json;
 using FWO.Basics;
 
@@ -13,13 +13,13 @@ namespace FWO.Data.Modelling
         public string IdString
         {
             get { return ManagedIdString.Whole; }
-            set { ManagedIdString = new (value); }
+            set { ManagedIdString = new(value); }
         }
-        public ModellingManagedIdString ManagedIdString { get; set; } = new ();
+        public ModellingManagedIdString ManagedIdString { get; set; } = new();
 
 
         public ModellingNwGroup()
-        {}
+        { }
 
         public ModellingNwGroup(ModellingNwGroup nwGroup) : base(nwGroup)
         {
@@ -57,14 +57,14 @@ namespace FWO.Data.Modelling
                 Id = Id,
                 Name = IdAsName ? IdString : Name + " (" + IdString + ")",
                 Number = Number,
-                Type = new NetworkObjectType(){ Name = ObjectType.Group }
+                Type = new NetworkObjectType() { Name = ObjectType.Group }
             };
         }
 
         public override bool Sanitize()
         {
             bool shortened = base.Sanitize();
-            ManagedIdString.FreePart = Sanitizer.SanitizeMand(ManagedIdString.FreePart, ref shortened);
+            ManagedIdString.FreePart = ManagedIdString.FreePart.SanitizeMand(ref shortened);
             return shortened;
         }
 
@@ -79,7 +79,7 @@ namespace FWO.Data.Modelling
             };
         }
     }
-    
+
     public class ModellingNwGroupWrapper
     {
         [JsonProperty("nwgroup"), JsonPropertyName("nwgroup")]

@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 using FWO.Data.Modelling;
 using Newtonsoft.Json;
 
@@ -59,10 +59,45 @@ namespace FWO.Middleware.Server
         public string? Criticality { get; set; }
 
         /// <summary>
+        /// Owner lifecycle state name
+        /// </summary>
+        [JsonProperty("owner_lifecycle_state"), JsonPropertyName("owner_lifecycle_state")]
+        public string? OwnerLifecycleState { get; set; }
+
+        /// <summary>
+        /// Owner responsibles grouped by responsible type name
+        /// Example:
+        /// "responsibles": {
+        ///   "ownerResponsibleType:Main": ["cn=user1,dc=example,dc=com"],
+        ///   "ownerResponsibleType:Supporting": []
+        /// }
+        /// </summary>
+        [JsonProperty("responsibles"), JsonPropertyName("responsibles")]
+        public Dictionary<string, List<string>>? Responsibles { get; set; } = [];
+
+        /// <summary>
         /// Source of App import
         /// </summary>
         [JsonProperty("import_source"), JsonPropertyName("import_source")]
         public string ImportSource { get; set; } = "";
+
+        /// <summary>
+        /// Recertification interval
+        /// </summary>
+        [JsonProperty("recert_period_days"), JsonPropertyName("recert_period_days")]
+        public int? RecertInterval { get; set; }
+
+        /// <summary>
+        /// First Recertification interval (currently not regarded)
+        /// </summary>
+        [JsonProperty("days_until_first_recert"), JsonPropertyName("days_until_first_recert")]
+        public int? FirstRecertInterval { get; set; }
+
+        /// <summary>
+        /// Recertification active
+        /// </summary>
+        [JsonProperty("recert_active"), JsonPropertyName("recert_active")]
+        public bool RecertActive { get; set; } = false;
 
         /// <summary>
         /// App Servers of App
@@ -70,7 +105,7 @@ namespace FWO.Middleware.Server
         [JsonProperty("app_servers"), JsonPropertyName("app_servers")]
         public List<ModellingImportAppServer> AppServers { get; set; } = [];
     }
-    
+
     /// <summary>
     /// Structure for imported app server 
     /// </summary>
@@ -81,12 +116,6 @@ namespace FWO.Middleware.Server
         /// </summary>
         [JsonProperty("name"), JsonPropertyName("name")]
         public string Name { get; set; } = "";
-
-        // /// <summary>
-        // /// App Server Subnet
-        // /// </summary>
-        // [JsonProperty("subnet"), JsonPropertyName("subnet")]
-        // public string Subnet { get; set; } = "";
 
         /// <summary>
         /// App Server Ip

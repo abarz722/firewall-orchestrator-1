@@ -1,4 +1,4 @@
-﻿using FWO.Basics;
+using FWO.Basics;
 using FWO.Logging;
 using FWO.Api.Client;
 using FWO.Api.Client.Queries;
@@ -92,7 +92,7 @@ namespace FWO.Middleware.Server
 
         private async Task<string> ImportMatrix(ImportNwZoneMatrixData importedMatrix, string importfileName)
         {
-            counters = new(){ AllZones = importedMatrix.NetworkZones.Count };
+            counters = new() { AllZones = importedMatrix.NetworkZones.Count };
             if (MatrixId == 0)
             {
                 await CreateMatrix(importedMatrix.Name, importfileName, importedMatrix.Comment);
@@ -111,6 +111,8 @@ namespace FWO.Middleware.Server
             {
                 await DeactivateZone(existingZone);
             }
+
+            await NetworkZoneService.UpdateSpecialZones(MatrixId, apiConnection, globalConfig);
 
             // Reload existing zones with all Ids
             ExistingZones = await apiConnection.SendQueryAsync<List<ComplianceNetworkZone>>(ComplianceQueries.getNetworkZonesForMatrix, new { criterionId = MatrixId });
@@ -254,12 +256,22 @@ namespace FWO.Middleware.Server
             ComplianceNetworkZone? existingZone = ExistingZones.FirstOrDefault(x => x.IdString == incomingZoneData.IdString);
             if (existingZone != null)
             {
+                // Dont allow auto-calculated undefine-internal to have allowed communications.
+
+                if (globalConfig.AutoCalculateInternetZone
+                    && globalConfig.AutoCalculateUndefinedInternalZone
+                    && incomingZoneData.CommData.Any(communication => communication.IdString == "AUTO_CALCULATED_ZONE_UNDEFINED_INTERNAL"))
+                {
+                    throw new ArgumentException("Matrix contains allowed communication data for readonly auto-calculated undefined-internal zone.");
+                }
+
                 List<int> existDestZoneIds = [.. existingZone.AllowedCommunicationDestinations.Select(x => x.Id)];
                 List<int> incomingDestZoneIds = [.. incomingZoneData.CommData.Select(x => ZoneIds[x.IdString])];
+
                 NetworkZoneService.AdditionsDeletions addDel = new()
                 {
-                    DestinationZonesToAdd = incomingDestZoneIds.Except(existDestZoneIds).ToList().ConvertAll(i => new ComplianceNetworkZone(){ Id = i }),
-                    DestinationZonesToDelete = existDestZoneIds.Except(incomingDestZoneIds).ToList().ConvertAll(i => new ComplianceNetworkZone(){ Id = i })
+                    DestinationZonesToAdd = incomingDestZoneIds.Except(existDestZoneIds).ToList().ConvertAll(i => new ComplianceNetworkZone() { Id = i }),
+                    DestinationZonesToDelete = existDestZoneIds.Except(incomingDestZoneIds).ToList().ConvertAll(i => new ComplianceNetworkZone() { Id = i })
                 };
                 await NetworkZoneService.UpdateZone(existingZone, addDel, apiConnection);
                 return (addDel.DestinationZonesToAdd.Count, addDel.DestinationZonesToDelete.Count);

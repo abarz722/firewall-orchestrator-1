@@ -1,4 +1,4 @@
-﻿using FWO.Api.Client;
+using FWO.Api.Client;
 using FWO.Api.Client.Queries;
 using FWO.Basics;
 using FWO.Data;
@@ -13,6 +13,7 @@ namespace FWO.DeviceAutoDiscovery
     {
         private readonly string Autodiscovery = "Autodiscovery";
         private readonly string CheckpointHost = "checkpoint-host";
+        private readonly string CheckpointClusterMember = "cluster-member";
 
         public AutoDiscoveryCpMds(Management mgm, ApiConnection apiConn) : base(mgm, apiConn) { }
 
@@ -23,7 +24,7 @@ namespace FWO.DeviceAutoDiscovery
             if (SuperManagement == null)
             {
                 return null!;
-            }                
+            }
             Log.WriteAudit(Autodiscovery, $"starting discovery for {SuperManagement.Name} (id={SuperManagement.Id})");
 
             if (SuperManagement.DeviceType.Name == "Check Point")
@@ -47,7 +48,7 @@ namespace FWO.DeviceAutoDiscovery
                 }
                 else if (SuperManagement.DeviceType.Id == 9)    // 9=stand-alone manager
                 {
-                    domainList.Add(new Domain() { DomainType="standalone", Name="", Uid="" } );                 
+                    domainList.Add(new Domain() { DomainType = "standalone", Name = "", Uid = "" });
                 }
                 discoveredDevices = await DiscoverDomainDevices(domainList, restClientCP);
                 await LogoutCp(restClientCP, @sessionId);
@@ -60,7 +61,7 @@ namespace FWO.DeviceAutoDiscovery
             Management currentManagement = new()
             {
                 Name = superManagement.Name + "__" + domainName,
-                Uid = superManagement.Uid, 
+                Uid = superManagement.Uid,
                 ImporterHostname = superManagement.ImporterHostname,
                 Hostname = superManagement.Hostname,
                 ImportCredential = superManagement.ImportCredential,
@@ -150,11 +151,14 @@ namespace FWO.DeviceAutoDiscovery
             }
             else
             {
-                string errorTxt = $"error while logging in to CP Manager: {sessionResponse.ErrorMessage} ";
-                if (sessionResponse?.Data?.SessionId == "")
-                    errorTxt += "could not authenticate to CP manager - got empty session ID";
+                string errorTxtCatch = $"{SuperManagement.Name}";
+                string errorTxt = $"error while logging in to {SuperManagement.Name}: {sessionResponse.ErrorMessage} ";
+                if (string.IsNullOrEmpty(sessionResponse.Data?.SessionId))
+                {
+                    errorTxt += $"could not authenticate to {SuperManagement.Name} - got empty session ID";
+                }
                 Log.WriteWarning(Autodiscovery, errorTxt);
-                throw new AuthenticationException(errorTxt);
+                throw new AuthenticationException(errorTxtCatch);
             }
             return sessionId;
         }
@@ -182,7 +186,7 @@ namespace FWO.DeviceAutoDiscovery
             // add devices to currentManagement
             foreach (CpDevice cpDev in devList)
             {
-                if (cpDev.CpDevType != CheckpointHost)   // leave out the management host
+                if (cpDev.CpDevType != CheckpointHost && cpDev.CpDevType != CheckpointClusterMember)   // leave out the management host  "cluster-member" and cluster members "cluster-member"
                 {
                     Device dev = new()
                     {

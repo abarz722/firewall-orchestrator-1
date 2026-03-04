@@ -1,4 +1,4 @@
-﻿using FWO.Logging;
+using FWO.Logging;
 
 namespace FWO.Api.Client.Queries
 {
@@ -8,6 +8,7 @@ namespace FWO.Api.Client.Queries
         public static readonly string getManagementNames;
         public static readonly string getManagementsDetails;
         public static readonly string getManagementDetailsWithoutSecrets;
+        public static readonly string getManagementsWithRulebases;
         public static readonly string getDeviceTypeDetails;
         public static readonly string newManagement;
         public static readonly string updateManagement;
@@ -16,6 +17,7 @@ namespace FWO.Api.Client.Queries
         public static readonly string changeManagementState;
         public static readonly string deleteManagement;
         public static readonly string getDeviceDetails;
+        public static readonly string getDevicesWithRulebaseLinks;
         public static readonly string newDevice;
         public static readonly string getGatewayId;
         public static readonly string updateDevice;
@@ -44,6 +46,7 @@ namespace FWO.Api.Client.Queries
                                         + GetQueryText("device/fragments/managementDetailsWithoutSecrets.graphql")
                                         + GetQueryText("device/fragments/deviceTypeDetails.graphql")
                                         + GetQueryText("device/fragments/importCredentialsWithoutSecrets.graphql");
+                getManagementsWithRulebases = GetQueryText("device/getManagementsWithRulebases.graphql");
                 getDeviceTypeDetails = GetQueryText("device/getDeviceTypeDetails.graphql")
                                         + GetQueryText("device/fragments/deviceTypeDetails.graphql");
                 newManagement = GetQueryText("device/newManagement.graphql");
@@ -55,7 +58,7 @@ namespace FWO.Api.Client.Queries
                 getDeviceDetails = GetQueryText("device/getDeviceDetails.graphql")
                                     + GetQueryText("device/fragments/deviceDetails.graphql")
                                     + GetQueryText("device/fragments/deviceTypeDetails.graphql");
-
+                getDevicesWithRulebaseLinks = GetQueryText("device/getDevicesWithRulebaseLinks.graphql");
                 newDevice = GetQueryText("device/newDevice.graphql");
                 updateDevice = GetQueryText("device/updateDevice.graphql");
                 updateGatewayUid = GetQueryText("device/updateGatewayUid.graphql");
@@ -75,7 +78,11 @@ namespace FWO.Api.Client.Queries
             catch (Exception exception)
             {
                 Log.WriteError("Initialize DeviceQueries", "Api DeviceQueries could not be loaded.", exception);
+#if RELEASE
                 Environment.Exit(-1);
+#else
+                throw;
+#endif
             }
         }
     }

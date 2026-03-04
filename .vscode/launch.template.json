@@ -55,6 +55,33 @@
             }
         },
         {
+            "name": "c#-MiddlewareServer - Hot Reload",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build_middleware",
+            "enableStepFiltering": false,
+            "program": "dotnet",
+            "args": [
+                "watch",
+                "run"
+            ],
+            "cwd": "${workspaceFolder}/roles/middleware/files/FWO.Middleware.Server",
+            "console": "internalConsole",
+            "stopAtEntry": false,
+            "requireExactSource": false,
+            "serverReadyAction": {
+                "action": "openExternally",
+                "pattern": "\\bNow listening on:\\s+(https?://\\S+)",
+                "uriFormat": "%s/swagger"
+            },
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development"
+            },
+            "logging": {
+                "moduleLoad": false
+            }
+        },
+        {
             "name": "c#-Blazor UI",
             "type": "coreclr",
             "request": "launch",
@@ -68,6 +95,29 @@
                 "action": "openExternally",
                 "pattern": "\\bNow listening on:\\s+(https?://\\S+)"
             },
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development"
+            },
+            "sourceFileMap": {
+                "/Views": "${workspaceFolder}/Views"
+            },
+            "logging": {
+                "moduleLoad": false
+            }
+        },
+        {
+            "name": "c#-Blazor UI - Hot Reload",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build_UI",
+            "program": "dotnet",
+            "args": [
+                "watch",
+                "run"
+            ],
+            "cwd": "${workspaceFolder}/roles/ui/files/FWO.UI",
+            "stopAtEntry": false,
+            "requireExactSource": false,
             "env": {
                 "ASPNETCORE_ENVIRONMENT": "Development"
             },
@@ -108,7 +158,7 @@
             "name": "py-import-mgm",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/roles/importer/files/importer/import-mgm.py",
+            "program": "${workspaceFolder}/roles/importer/files/importer/import_mgm.py",
             "console": "integratedTerminal",
             "env": {
                 "PYTHONPATH": "${PYTHONPATH}:${workspaceRoot}"
@@ -117,13 +167,7 @@
                 "-m1",
                 "-d1",
                 "-f",
-                "-s",
-                // "-c",
-                // "-l66",
-                // "-l500",
-                // "-ihttps://fwodemodata.cactus.de/demo04_cpr8x.json",
-                // "-ihttps://fwodemodata.cactus.de/demo05_fortiMgr2.json"
-                // "-ihttps://fwodemodata.cactus.de/demo11-r82_v9.json",
+                "-s"
             ]
         },
         {
@@ -346,44 +390,34 @@
                 "-i/tmp/fworch-config.graphql"
             ]
         },
-        // {
-        //     "name": "py-cpr8x-autodiscovery",
-        //     "type": "debugpy",
-        //     "request": "launch",
-        //     "program": "${workspaceFolder}/roles/importer/files/importer/checkpointR8x/auto-discover.py",
-        //     "console": "integratedTerminal",
-        //     "cwd": "${workspaceFolder}/roles/importer/files/importer/checkpointR8x",
-        //     "env": {
-        //         "PYTHONPATH": "${PYTHONPATH}:${workspaceRoot}"
-        //     },
-        //     "args": [
-        //         "-a192.168.100.111",
-        //         "-w/home/tim/secrets/cp_apiuser_pwd",
-        //         "-uitsecorg",
-        //         "-d4",
-        //         "-fjson"
-        //     ]
-        // },
         {
-            "name": "py-import-main-loop",
+            "name": "py-import_main_loop",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/roles/importer/files/importer/import-main-loop.py",
+            "program": "${workspaceFolder}/roles/importer/files/importer/import_main_loop.py",
             "console": "integratedTerminal",
             "env": {
                 "PYTHONPATH": "${PYTHONPATH}:${workspaceRoot}"
             },
             "args": [
-                //"-c",
-                //"-f",
                 "-d0"
             ]
+        },
+        {
+            "name": "py-create-mock-config",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/roles/importer/files/importer/test/tools/create_mock_config_file.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/roles/importer/files/importer",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/roles/importer/files/importer:${env:PYTHONPATH}"
+            }
         },
         {
             "name": "c#-FWO Test",
             "type": "coreclr",
             "request": "launch",
-            // "preLaunchTask": "build_test",
             "program": "/usr/bin/dotnet",
             "args": [
                 "test"
@@ -403,6 +437,24 @@
             "type": "python",
             "request": "launch",
             "module": "roles.importer.files.test.mocking.mock_config"
+        },
+        {
+            "name": "pytest current file",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": [
+                "-s",
+                "-vv",
+                "--cov-report", "xml:cov.xml",
+                "--cov", ".",
+                "${file}"
+            ],
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${PYTHONPATH}:${workspaceRoot}"
+            },
+            "cwd": "${workspaceFolder}"
         }
     ]
 }

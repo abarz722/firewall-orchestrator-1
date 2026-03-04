@@ -1,5 +1,5 @@
 using FWO.Basics;
-using System.Text.Json.Serialization; 
+using System.Text.Json.Serialization;
 using Newtonsoft.Json;
 
 namespace FWO.Data.Modelling
@@ -16,7 +16,7 @@ namespace FWO.Data.Modelling
         public string ExtraConfigText { get; set; } = "";
 
         public ModellingExtraConfig()
-        {}
+        { }
 
         public ModellingExtraConfig(ModellingExtraConfig conf)
         {
@@ -34,8 +34,8 @@ namespace FWO.Data.Modelling
         public bool Sanitize()
         {
             bool shortened = false;
-            ExtraConfigType = Sanitizer.SanitizeMand(ExtraConfigType, ref shortened);
-            ExtraConfigText = Sanitizer.SanitizeMand(ExtraConfigText, ref shortened);
+            ExtraConfigType = ExtraConfigType.SanitizeMand(ref shortened);
+            ExtraConfigText = ExtraConfigText.SanitizeMand(ref shortened);
             return shortened;
         }
     }

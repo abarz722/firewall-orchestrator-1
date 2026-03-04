@@ -1,4 +1,4 @@
-﻿using FWO.Basics;
+using FWO.Basics;
 using FWO.Logging;
 using FWO.Api.Client;
 using FWO.Api.Client.Queries;
@@ -52,7 +52,7 @@ namespace FWO.Middleware.Server
 
         private async Task ImportSingleFile(string importfilePathAndName, List<ModellingImportNwData> allNwData, List<string> failedImports)
         {
-            if (!RunImportScript(importfilePathAndName + ".py"))
+            if (!RunImportScript(importfilePathAndName + ".py", null))
             {
                 Log.WriteInfo(LogMessageTitle, $"Script {importfilePathAndName}.py failed but trying to import from existing file.");
             }
@@ -313,7 +313,7 @@ namespace FWO.Middleware.Server
         {
             try
             {
-                await apiConnection.SendQueryAsync<ReturnIdWrapper>(ModellingQueries.setAreaDeletedState, new { id = area.Id, deleted = true });
+                await apiConnection.SendQueryAsync<ReturnIdWrapper>(ModellingQueries.setNwGroupDeletedState, new { id = area.Id, deleted = true });
                 await apiConnection.SendQueryAsync<ReturnIdWrapper>(ModellingQueries.removeSelectedNwGroupObjectFromAllApps, new { nwGroupId = area.Id });
             }
             catch (Exception exc)
@@ -330,7 +330,7 @@ namespace FWO.Middleware.Server
         {
             try
             {
-                await apiConnection.SendQueryAsync<ReturnIdWrapper>(ModellingQueries.setAreaDeletedState, new { id = area.Id, deleted = false });
+                await apiConnection.SendQueryAsync<ReturnIdWrapper>(ModellingQueries.setNwGroupDeletedState, new { id = area.Id, deleted = false });
             }
             catch (Exception exc)
             {

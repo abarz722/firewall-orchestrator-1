@@ -1,9 +1,10 @@
-﻿using System.Text.Json.Serialization; 
+using FWO.Basics;
 using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace FWO.Data.Workflow
 {
-    public class WfTicketBase: WfStatefulObject
+    public class WfTicketBase : WfStatefulObject
     {
         [JsonProperty("id"), JsonPropertyName("id")]
         public long Id { get; set; }
@@ -62,16 +63,17 @@ namespace FWO.Data.Workflow
             ExternalTicketId = ticket.ExternalTicketId;
             ExternalTicketSource = ticket.ExternalTicketSource;
             Deadline = ticket.Deadline;
+            Priority = ticket.Priority;
         }
 
         public override bool Sanitize()
         {
             bool shortened = base.Sanitize();
-            Title = Sanitizer.SanitizeMand(Title, ref shortened);
-            RequesterDn = Sanitizer.SanitizeLdapPathOpt(RequesterDn, ref shortened);
-            RequesterGroup = Sanitizer.SanitizeLdapPathOpt(RequesterGroup, ref shortened);
-            Reason = Sanitizer.SanitizeOpt(Reason, ref shortened);
-            ExternalTicketId = Sanitizer.SanitizeOpt(ExternalTicketId, ref shortened);
+            Title = Title.SanitizeMand(ref shortened);
+            RequesterDn = RequesterDn.SanitizeLdapPathOpt(ref shortened);
+            RequesterGroup = RequesterGroup.SanitizeLdapPathOpt(ref shortened);
+            Reason = Reason.SanitizeOpt(ref shortened);
+            ExternalTicketId = ExternalTicketId.SanitizeOpt(ref shortened);
             return shortened;
         }
     }

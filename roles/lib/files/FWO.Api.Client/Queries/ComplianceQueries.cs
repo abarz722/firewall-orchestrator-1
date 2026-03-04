@@ -1,4 +1,4 @@
-﻿using FWO.Logging;
+using FWO.Logging;
 
 namespace FWO.Api.Client.Queries
 {
@@ -15,6 +15,9 @@ namespace FWO.Api.Client.Queries
         public static readonly string getViolations;
         public static readonly string updateViolationById;
         public static readonly string removeViolations;
+        public static readonly string getViolationsChunk;
+        public static readonly string getViolationsByRuleID;
+        public static readonly string getViolationsByRuleUid;
 
         public static readonly string addPolicy;
         public static readonly string disablePolicy;
@@ -27,10 +30,13 @@ namespace FWO.Api.Client.Queries
         public static readonly string getCriteria;
         public static readonly string getMatrices;
         public static readonly string getMatrixByName;
-        
+
         public static readonly string addCritToPolicy;
         public static readonly string removeCritFromPolicy;
         public static readonly string getPolicyIdsForCrit;
+
+        public static readonly string deleteAllViolations;
+        public static readonly string getViolationCount;
 
         static ComplianceQueries()
         {
@@ -63,11 +69,22 @@ namespace FWO.Api.Client.Queries
                 addCritToPolicy = GetQueryText("compliance/addCritToPolicy.graphql");
                 removeCritFromPolicy = GetQueryText("compliance/removeCritFromPolicy.graphql");
                 getPolicyIdsForCrit = GetQueryText("compliance/getPolicyIdsForCrit.graphql");
+
+                getViolationsChunk = GetQueryText("compliance/getViolationsChunk.graphql");
+                getViolationsByRuleID = GetQueryText("compliance/getViolationsByRuleID.graphql");
+                getViolationsByRuleUid = GetQueryText("compliance/getViolationsByRuleUid.graphql");
+
+                deleteAllViolations = GetQueryText("compliance/deleteAllViolations.graphql");
+                getViolationCount = GetQueryText("compliance/getViolationCount.graphql");
             }
             catch (Exception exception)
             {
                 Log.WriteError("Initialize Compliance Queries", "Api compliance queries could not be loaded.", exception);
+#if RELEASE
                 Environment.Exit(-1);
+#else
+                throw;
+#endif
             }
         }
     }

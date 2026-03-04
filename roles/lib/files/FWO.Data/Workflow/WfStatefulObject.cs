@@ -1,5 +1,6 @@
-﻿using System.Text.Json.Serialization; 
+using FWO.Basics;
 using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace FWO.Data.Workflow
 {
@@ -15,18 +16,18 @@ namespace FWO.Data.Workflow
     public class WfStatefulObject
     {
         [JsonProperty("state_id"), JsonPropertyName("state_id")]
-        public int StateId 
-        { 
-            get { return stateId; } 
-            set 
+        public int StateId
+        {
+            get { return stateId; }
+            set
             {
-                if(!stateChanged)
+                if (!stateChanged)
                 {
                     stateChanged = oldStateId != value;
                     oldStateId = stateId;
                 }
-                stateId = value; 
-            } 
+                stateId = value;
+            }
         }
 
         [JsonProperty("current_handler"), JsonPropertyName("current_handler")]
@@ -39,7 +40,7 @@ namespace FWO.Data.Workflow
         public string? AssignedGroup { get; set; }
 
 
-         // need private declarations, else we get problems with request_reqtask_arr_rel_insert_input in newTicket
+        // need private declarations, else we get problems with request_reqtask_arr_rel_insert_input in newTicket
         private int stateId;
         private int oldStateId;
         private bool stateChanged = false;
@@ -88,15 +89,15 @@ namespace FWO.Data.Workflow
         public virtual bool Sanitize()
         {
             bool shortened = false;
-            optComment = Sanitizer.SanitizeOpt(optComment, ref shortened);
-            AssignedGroup = Sanitizer.SanitizeLdapPathOpt(AssignedGroup, ref shortened);
+            optComment = optComment.SanitizeOpt(ref shortened);
+            AssignedGroup = AssignedGroup.SanitizeLdapPathOpt(ref shortened);
             return shortened;
         }
 
         public static string DisplayAllComments(List<WfCommentDataHelper> Comments, bool asMarkup = false)
         {
             string allComments = "";
-            foreach(var comment in Comments)
+            foreach (var comment in Comments)
             {
                 allComments += comment.Comment.CreationDate.ToShortDateString() + " "
                             + comment.Comment.Creator.Name + ": "

@@ -1,4 +1,4 @@
-﻿using FWO.Logging;
+using FWO.Logging;
 
 namespace FWO.Api.Client.Queries
 {
@@ -14,7 +14,7 @@ namespace FWO.Api.Client.Queries
 
         public static readonly string getAreas;
         public static readonly string newArea;
-        public static readonly string setAreaDeletedState;
+        public static readonly string setNwGroupDeletedState;
         public static readonly string newAreaIpData;
         public static readonly string getConnectionIdsForNwGroup;
 
@@ -48,6 +48,7 @@ namespace FWO.Api.Client.Queries
         public static readonly string replaceUsedInterface;
         public static readonly string updateConnectionFwRequested;
         public static readonly string updateConnectionRemove;
+        public static readonly string updateConnectionDecommission;
         public static readonly string deleteConnection;
         public static readonly string addAppServerToConnection;
         public static readonly string removeAppServerFromConnection;
@@ -64,11 +65,15 @@ namespace FWO.Api.Client.Queries
         public static readonly string removeAllServiceGroupsFromConnection;
         public static readonly string getConnectionIdsForService;
         public static readonly string getConnectionIdsForServiceGroup;
+        public static readonly string getConnectionsForNwGroup;
 
         public static readonly string getSelectedConnections;
         public static readonly string addSelectedConnection;
         public static readonly string removeSelectedConnectionFromApp;
         public static readonly string removeSelectedConnection;
+        public static readonly string addPermittedOwner;
+        public static readonly string deletePermittedOwner;
+        public static readonly string getPermittedOwnersForConnection;
 
         public static readonly string getNwGroupObjects;
         public static readonly string getSelectedNwGroupObjects;
@@ -126,9 +131,10 @@ namespace FWO.Api.Client.Queries
 
                 getAreas = areaDetailsFragment + GetQueryText("modelling/getAreas.graphql");
                 newArea = GetQueryText("modelling/newArea.graphql");
-                setAreaDeletedState = GetQueryText("modelling/setAreaDeletedState.graphql");
+                setNwGroupDeletedState = GetQueryText("modelling/setNwGroupDeletedState.graphql");
                 newAreaIpData = GetQueryText("modelling/newAreaIpData.graphql");
                 getConnectionIdsForNwGroup = GetQueryText("modelling/getConnectionIdsForNwGroup.graphql");
+                getConnectionsForNwGroup = connectionDetailsFragment + GetQueryText("modelling/getConnectionsForNwGroup.graphql");
 
                 getAppServersByIp = appServerDetailsFragment + GetQueryText("modelling/getAppServersByIp.graphql");
                 getAppServersByName = appServerDetailsFragment + GetQueryText("modelling/getAppServersByName.graphql");
@@ -145,7 +151,7 @@ namespace FWO.Api.Client.Queries
                 getConnectionIdsForAppServer = GetQueryText("modelling/getConnectionIdsForAppServer.graphql");
 
                 getPublishedInterfaces = connectionDetailsFragment + GetQueryText("modelling/getPublishedInterfaces.graphql");
-                getConnectionById = connectionDetailsFragment + GetQueryText("modelling/getConnectionById.graphql");                
+                getConnectionById = connectionDetailsFragment + GetQueryText("modelling/getConnectionById.graphql");
                 getConnections = connectionDetailsFragment + GetQueryText("modelling/getConnections.graphql");
                 getConnectionsResolved = connectionResolvedDetailsFragment + GetQueryText("modelling/getConnectionsResolved.graphql");
                 getConnectionsByTicketId = connectionDetailsFragment + GetQueryText("modelling/getConnectionsByTicketId.graphql");
@@ -176,11 +182,15 @@ namespace FWO.Api.Client.Queries
                 removeAllServiceGroupsFromConnection = GetQueryText("modelling/removeAllServiceGroupsFromConnection.graphql");
                 getConnectionIdsForService = GetQueryText("modelling/getConnectionIdsForService.graphql");
                 getConnectionIdsForServiceGroup = GetQueryText("modelling/getConnectionIdsForServiceGroup.graphql");
+                updateConnectionDecommission = GetQueryText("modelling/updateConnectionDecommission.graphql");
 
                 getSelectedConnections = connectionDetailsFragment + GetQueryText("modelling/getSelectedConnections.graphql");
                 addSelectedConnection = GetQueryText("modelling/addSelectedConnection.graphql");
                 removeSelectedConnectionFromApp = GetQueryText("modelling/removeSelectedConnectionFromApp.graphql");
                 removeSelectedConnection = GetQueryText("modelling/removeSelectedConnection.graphql");
+                addPermittedOwner = GetQueryText("modelling/addPermittedOwner.graphql");
+                deletePermittedOwner = GetQueryText("modelling/deletePermittedOwner.graphql");
+                getPermittedOwnersForConnection = GetQueryText("modelling/getPermittedOwnersForConnection.graphql");
 
                 getNwGroupObjects = GetQueryText("modelling/getNwGroupObjects.graphql");
                 getSelectedNwGroupObjects = GetQueryText("modelling/getSelectedNwGroupObjects.graphql");
@@ -194,7 +204,6 @@ namespace FWO.Api.Client.Queries
                 newAppRole = GetQueryText("modelling/newAppRole.graphql");
                 updateAppRole = GetQueryText("modelling/updateAppRole.graphql");
                 deleteNwGroup = GetQueryText("modelling/deleteNwGroup.graphql");
-                // getAppServerForAppRole = appServerDetailsFragment + GetQueryText("modelling/getAppServerForAppRole.graphql");
                 addNwObjectToNwGroup = GetQueryText("modelling/addNwObjectToNwGroup.graphql");
                 removeNwObjectFromNwGroup = GetQueryText("modelling/removeNwObjectFromNwGroup.graphql");
                 updateNwObjectInNwGroup = GetQueryText("modelling/updateNwObjectInNwGroup.graphql");
@@ -225,7 +234,11 @@ namespace FWO.Api.Client.Queries
             catch (Exception exception)
             {
                 Log.WriteError("Initialize ModellingQueries", "Api ModellingQueries could not be loaded.", exception);
+#if RELEASE
                 Environment.Exit(-1);
+#else
+                throw;
+#endif
             }
         }
     }

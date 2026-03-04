@@ -1,5 +1,6 @@
-using System.Text.Json.Serialization; 
+using FWO.Basics;
 using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 
 namespace FWO.Data.Report
@@ -19,16 +20,16 @@ namespace FWO.Data.Report
         public DateTime GenerationDateEnd { get; set; }
 
         [JsonProperty("report_template"), JsonPropertyName("report_template")]
-        public ReportTemplate Template { get; set; } = new ();
+        public ReportTemplate Template { get; set; } = new();
 
         [JsonProperty("report_template_id"), JsonPropertyName("report_template_id")]
         public int TemplateId { get; set; }
 
         [JsonProperty("uiuser"), JsonPropertyName("uiuser")]
-        public UiUser ReportOwningUser { get; set; } = new ();
+        public UiUser ReportOwningUser { get; set; } = new();
 
         [JsonProperty("report_owner_id"), JsonPropertyName("report_owner_id")]
-        public int OwnerId { get; set; }
+        public int OwningUserId { get; set; }
 
         [JsonProperty("report_json"), JsonPropertyName("report_json")]
         public string? Json { get; set; }
@@ -48,10 +49,16 @@ namespace FWO.Data.Report
         [JsonProperty("description"), JsonPropertyName("description")]
         public String? Description { get; set; }
 
+        [JsonProperty("read_only"), JsonPropertyName("read_only")]
+        public bool ReadOnly { get; set; } = false;
+
+        [JsonProperty("owner"), JsonPropertyName("owner")]
+        public FwoOwner? Owner { get; set; }
+
         public bool Sanitize()
         {
             bool shortened = false;
-            Name = Sanitizer.SanitizeMand(Name, ref shortened);
+            Name = Name.SanitizeMand(ref shortened);
             return shortened;
         }
     }

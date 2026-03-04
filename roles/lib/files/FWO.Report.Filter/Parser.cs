@@ -138,23 +138,23 @@ namespace FWO.Report.Filter
             Token Value = CheckToken(TokenKind.Value);
             return Name.Kind switch
             {
-                TokenKind.Value or TokenKind.Owner or TokenKind.Service or TokenKind.Action or TokenKind.Management or TokenKind.Gateway or TokenKind.FullText or TokenKind.Protocol
+                TokenKind.Value or TokenKind.Service or TokenKind.Action or TokenKind.Management or TokenKind.Gateway or TokenKind.FullText or TokenKind.Protocol
                 => new AstNodeFilterString() { Name = Name, Operator = Operator, Value = Value },
 
                 TokenKind.Disabled or TokenKind.SourceNegated or TokenKind.DestinationNegated or TokenKind.ServiceNegated or TokenKind.Remove
                 => new AstNodeFilterBool() { Name = Name, Operator = Operator, Value = Value },
 
-                TokenKind.Time or TokenKind.LastHit 
+                TokenKind.Time or TokenKind.LastHit
                 => new AstNodeFilterDateTimeRange() { Name = Name, Operator = Operator, Value = Value },
 
-                TokenKind.ReportType 
+                TokenKind.ReportType
                 => new AstNodeFilterReportType() { Name = Name, Operator = Operator, Value = Value },
 
                 TokenKind.DestinationPort or TokenKind.RecertDisplay or TokenKind.Unused
                 => new AstNodeFilterInt() { Name = Name, Operator = Operator, Value = Value },
 
                 TokenKind.Source or TokenKind.Destination
-                => new AstNodeFilterNetwork() { Name = Name, Operator = Operator, Value = Value},
+                => new AstNodeFilterNetwork() { Name = Name, Operator = Operator, Value = Value },
 
                 _ => throw new NotSupportedException($"No type found for filter with token kind: {Name.Kind}"),
             };
@@ -168,7 +168,7 @@ namespace FWO.Report.Filter
         private Token ParseFilterName()
         {
             return CheckToken(
-                TokenKind.LastHit, TokenKind.Owner, TokenKind.Destination, TokenKind.Source, TokenKind.Service, TokenKind.Protocol,
+                TokenKind.LastHit, TokenKind.Destination, TokenKind.Source, TokenKind.Service, TokenKind.Protocol,
                 TokenKind.DestinationPort, TokenKind.Action, TokenKind.FullText, TokenKind.Gateway,
                 TokenKind.Management, TokenKind.Remove, TokenKind.RecertDisplay, TokenKind.Disabled, TokenKind.Unused);
         }

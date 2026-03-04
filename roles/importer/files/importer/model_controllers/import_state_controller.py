@@ -1,313 +1,298 @@
-import time
-from datetime import datetime
-import urllib3
 import traceback
+from datetime import datetime, timezone
 
 import fwo_globals
-
+import urllib3
+from dateutil import parser
 from fwo_api import FwoApi
 from fwo_api_call import FwoApiCall
-from fwo_log import getFwoLogger
-from fwo_config import readConfig
-from fwo_const import fwo_config_filename, graphql_query_path
+from fwo_config import read_config
+from fwo_const import FWO_CONFIG_FILENAME, GRAPHQL_QUERY_PATH
 from fwo_exceptions import FwoImporterError
-from models.import_state import ImportState
+from fwo_log import FWOLogger
 from model_controllers.fworch_config_controller import FworchConfigController
-from model_controllers.management_controller import ManagementController
-from model_controllers.import_statistics_controller import ImportStatisticsController
-
+from model_controllers.management_controller import (
+    ConnectionInfo,
+    CredentialInfo,
+    DeviceInfo,
+    DomainInfo,
+    ManagementController,
+    ManagerInfo,
+)
+from models.import_state import ImportState
 
 """Used for storing state during import process per management"""
-class ImportStateController(ImportState):
 
-    api_connection:FwoApi
+
+class ImportStateController:
+    state: ImportState
+    api_connection: FwoApi
     api_call: FwoApiCall
 
-    def __init__(self, debugLevel, configChangedSinceLastImport, fwoConfig, mgmDetails, jwt, force, 
-                 version=8, isFullImport=False, isInitialImport=False, isClearingImport=False, verifyCerts=False, LastSuccessfulImport=None):
-        self.Stats = ImportStatisticsController()
-        self.StartTime = int(time.time())
-        self.DebugLevel = debugLevel
-        self.VerifyCerts = verifyCerts
-        self.ConfigChangedSinceLastImport = configChangedSinceLastImport
-        self.FwoConfig = fwoConfig
-        self.MgmDetails = ManagementController.fromJson(mgmDetails)
-        self.ImportId = -1
-        self.Jwt = jwt
-        self.ImportFileName = ""
-        self.ForceImport = force
-        self.ImportVersion = int(version)
-        self.IsFullImport = isFullImport
-        self.IsInitialImport = isInitialImport
-        self.IsClearingImport = isClearingImport
-        self.RulbaseToGatewayMap = {}
-        self.LastSuccessfulImport = LastSuccessfulImport
-        self.api_connection = FwoApi(fwoConfig.FwoApiUri, jwt)
-        self.api_call = FwoApiCall(self.api_connection)
+    def __init__(self, state: ImportState, api_call: FwoApiCall):
+        self.state = state
+        self.api_call = api_call
+        self.api_connection = api_call.api
 
     def __str__(self):
-        return f"{str(self.MgmDetails)}(import_id={self.ImportId})"
-    
-    def setImportFileName(self, importFileName):
-        self.ImportFileName = importFileName
+        return f"{self.state.mgm_details!s}(import_id={self.state.import_id})"
 
-    def setImportId(self, importId):
-        self.ImportId = importId
+    def set_import_file_name(self, import_file_name: str):
+        self.state.import_file_name = import_file_name
 
-    def increaseErrorCounter(self, errorNo):
-        self.Stats.ErrorCount = self.Stats.ErrorCount + errorNo
-
-    def increaseErrorCounterByOne(self):
-        self.increaseErrorCounter(1)
-
-    def appendErrorString(self, errorStr):
-        self.Stats.ErrorDetails.append(errorStr)
-
-    def getErrors(self):
-        return self.Stats.ErrorDetails
-
-    def getErrorString(self):
-        return str(self.Stats.ErrorDetails)
-    
-    def addError(self, error, log=False):
-        self.increaseErrorCounterByOne()
-        self.appendErrorString(str(error))
-        if log and not self.Stats.ErrorAlreadyLogged:
-            logger = getFwoLogger()
-            logger.error(str(error))
-            # self.Stats.ErrorAlreadyLogged = True
-
+    def set_import_id(self, import_id: int):
+        self.state.import_id = import_id
 
     @classmethod
-    def initializeImport(cls, mgmId, fwo_api_uri, jwt,
-                         debugLevel=0, suppressCertWarnings=False, 
-                         sslVerification=False, force=False, version=8,
-                         isClearingImport=False, isFullImport=False, isInitialImport=False,
-                         ):
+    def initialize_import(
+        cls,
+        mgm_id: int,
+        api_call: FwoApiCall,
+        suppress_cert_warnings: bool,
+        ssl_verification: bool,
+        force: bool,
+        version: int,
+        is_clearing_import: bool,
+    ):
+        fwo_config = FworchConfigController.from_json(read_config(FWO_CONFIG_FILENAME))
 
-        def _check_input_parameters(mgmId):
-            if mgmId is None:
-                raise ValueError("parameter mgm_id is mandatory")
-
-        logger = getFwoLogger()
-        _check_input_parameters(mgmId)
-
-        fwoConfig = FworchConfigController.fromJson(readConfig(fwo_config_filename))
-
-        api_conn = FwoApi(ApiUri=fwoConfig.FwoApiUri, Jwt=jwt)
-        api_call = FwoApiCall(api_conn)
         # set global https connection values
-        fwo_globals.set_global_values (suppress_cert_warnings_in=suppressCertWarnings, verify_certs_in=sslVerification, debug_level_in=debugLevel)
-        if fwo_globals.suppress_cert_warnings:
-            urllib3.disable_warnings()  # suppress ssl warnings only    
-
-        try: # get mgm_details (fw-type, port, ip, user credentials):
-            mgm_controller = ManagementController(
-                hostname='', id=int(mgmId), uid='', devices={},
-                name='', deviceTypeName='', deviceTypeVersion=''
-            )
-            mgmDetails = mgm_controller.get_mgm_details(api_conn, mgmId, debugLevel) 
-        except Exception as e:
-            logger.error(f"import_management - error while getting fw management details for mgm={str(mgmId)}: {str(traceback.format_exc())}")
-            raise
-
-        try: # get last import data
-            last_import_id, last_import_date = api_call.get_last_complete_import({"mgmId": int(mgmId)}, debug_level=0)
-        except Exception:
-            logger.error("import_management - error while getting last import data for mgm=" + str(mgmId) )
-            raise
-
-        result = cls (
-            debugLevel = int(debugLevel),
-            configChangedSinceLastImport = True,
-            fwoConfig = fwoConfig,
-            mgmDetails = mgmDetails,
-            jwt = jwt,
-            force = force,
-            version = version,
-            isClearingImport=isClearingImport,
-            isFullImport=isFullImport,
-            isInitialImport=(last_import_date == ""),
-            verifyCerts=sslVerification,
-            LastSuccessfulImport=last_import_date,
+        fwo_globals.set_global_values(
+            suppress_cert_warnings_in=suppress_cert_warnings,
+            verify_certs_in=ssl_verification,
         )
+        if fwo_globals.suppress_cert_warnings:
+            urllib3.disable_warnings()  # suppress ssl warnings only
 
-        result.getPastImportInfos()
-        result.setCoreData()
-
-        if type(result) is str:
-            logger.error("error while getting import state")
-            raise FwoImporterError("error while getting import state")
-        
-        return result 
-
-
-    def getPastImportInfos(self):        
-        logger = getFwoLogger()
-        api_call = FwoApiCall(FwoApi(ApiUri=self.FwoConfig.FwoApiUri, Jwt=self.Jwt))
-        try: # get past import details (LastFullImport, ...):
-            day_string = api_call.get_config_value(key='dataRetentionTime')
-            if day_string:
-                self.DataRetentionDays = int(day_string)
-            self.LastFullImportId, self.lastFullImportDate = \
-                api_call.get_last_complete_import({"mgmId": int(self.MgmDetails.Id)}, self.DebugLevel) 
-        except Exception:
-            logger.error(f"import_management - error while getting past import details for mgm={str(self.MgmDetails.Id)}: {str(traceback.format_exc())}")
+        try:  # get mgm_details (fw-type, port, ip, user credentials):
+            mgm_controller = ManagementController(
+                mgm_id,
+                "",
+                [],
+                DeviceInfo(),
+                ConnectionInfo(),
+                "",
+                CredentialInfo(),
+                ManagerInfo(),
+                DomainInfo(),
+            )
+            mgm_details = mgm_controller.get_mgm_details(api_call.api, mgm_id)
+        except Exception as _:
+            FWOLogger.error(
+                f"import_management - error while getting fw management details for mgm={mgm_id}: {traceback.format_exc()!s}"
+            )
             raise
 
-        if self.lastFullImportDate != "":
-            self.LastSuccessfulImport = self.lastFullImportDate
+        try:  # get last import data
+            _, last_import_date = api_call.get_last_complete_import({"mgmId": mgm_id})
+        except Exception:
+            FWOLogger.error(f"import_management - error while getting last import data for mgm={mgm_id}")
+            raise
+
+        state = ImportState()
+        state.config_changed_since_last_import = True
+        state.fwo_config = fwo_config
+        state.mgm_details = ManagementController.from_json(mgm_details)
+        state.force_import = force
+        state.import_version = version
+        state.is_clearing_import = is_clearing_import
+        state.is_initial_import = last_import_date == ""
+        state.verify_certs = ssl_verification
+        state.last_successful_import = last_import_date
+
+        result = cls(state, api_call)
+        result.get_past_import_infos()
+        result.set_core_data()
+
+        if type(result) is str:  # type: ignore # TODO: This should never happen  # noqa: PGH003
+            FWOLogger.error("error while getting import state")
+            raise FwoImporterError("error while getting import state")
+
+        return result
+
+    def get_past_import_infos(self):
+        try:  # get past import details (LastFullImport, ...):
+            day_string = self.api_call.get_config_value(key="dataRetentionTime")
+            if day_string:
+                self.state.data_retention_days = int(day_string)
+            self.state.last_full_import_id, self.state.last_full_import_date = self.api_call.get_last_complete_import(
+                {"mgmId": int(self.state.mgm_details.mgm_id)}
+            )
+        except Exception:
+            FWOLogger.error(
+                f"import_management - error while getting past import details for mgm={self.state.mgm_details.mgm_id!s}: {traceback.format_exc()!s}"
+            )
+            raise FwoImporterError(f"Error while getting past import details: {traceback.format_exc()!s}")
+
+        if self.state.last_full_import_date != "":
+            self.state.last_successful_import = self.state.last_full_import_date
 
             # Convert the string to a datetime object
-            pastDate = datetime.strptime(self.lastFullImportDate, "%Y-%m-%dT%H:%M:%S.%f")
-            now = datetime.now()
-            difference = now - pastDate
-            self.DaysSinceLastFullImport = difference.days
+            past_date = parser.parse(self.state.last_full_import_date)
+
+            # Ensure "now" is timezone-aware (UTC here)
+            now = datetime.now(timezone.utc)
+
+            # Normalize pastDate too (convert to UTC if it had a tz)
+            past_date = (
+                past_date.replace(tzinfo=timezone.utc)
+                if past_date.tzinfo is None
+                else past_date.astimezone(timezone.utc)
+            )
+
+            difference = now - past_date
+
+            self.state.days_since_last_full_import = difference.days
         else:
-            self.DaysSinceLastFullImport = 0
-            # self.IsInitialImport = True
+            self.state.days_since_last_full_import = 0
 
+    def set_core_data(self):
+        self.set_track_map()
+        self.set_action_map()
+        self.set_link_type_map()
+        self.set_color_ref_map()
+        self.set_network_obj_type_map()
+        self.set_service_obj_type_map()
+        self.set_user_obj_type_map()
+        self.set_protocol_map()
+        self.set_gateway_map()
+        self.set_management_map()
 
-    def setCoreData(self):
-        api_call = FwoApiCall(FwoApi(ApiUri=self.FwoConfig.FwoApiUri, Jwt=self.Jwt))
-        self.SetTrackMap(api_call)
-        self.SetActionMap(api_call)
-        self.SetLinkTypeMap(api_call)
-        self.SetGatewayMap(api_call)
-        self.SetManagementMap(api_call)
-        self.SetColorRefMap(api_call)
-
-        # the following maps will be empty when starting first import of a management
-        self.SetRulebaseMap(api_call)
-        self.SetRuleMap(api_call)
-
-    def SetActionMap(self, api_call):
+    def set_action_map(self):
         query = "query getActionMap { stm_action { action_name action_id allowed } }"
         try:
-            result = api_call.call(query=query, query_variables={})
-        except Exception:
-            logger = getFwoLogger()
-            logger.error('Error while getting stm_action')
-            raise
-        
-        map: dict[str, int] = {}
-        for action in result['data']['stm_action']:
-            map.update({action['action_name']: action['action_id']})
-        self.Actions = map
+            result = self.api_call.call(query=query, query_variables={})
+        except Exception as e:
+            FWOLogger.error(f"Error while getting stm_action: {e!s}")
+            raise FwoImporterError(f"Error while getting stm_action: {e!s}")
 
-    def SetTrackMap(self, api_call):
+        action_map: dict[str, int] = {}
+        for action in result["data"]["stm_action"]:
+            action_map.update({action["action_name"]: action["action_id"]})
+        self.state.actions = action_map
+
+    def set_track_map(self):
         query = "query getTrackMap { stm_track { track_name track_id } }"
         try:
-            result = api_call.call(query=query, query_variables={})
-        except Exception:
-            logger = getFwoLogger()
-            logger.error('Error while getting stm_track')
-            raise
+            result = self.api_call.call(query=query, query_variables={})
+        except Exception as e:
+            FWOLogger.error(f"Error while getting stm_track: {e!s}")
+            raise FwoImporterError(f"Error while getting stm_track: {e!s}")
 
         track_map: dict[str, int] = {}
-        for track in result['data']['stm_track']:
-            track_map.update({track['track_name']: track['track_id']})
-        self.Tracks = track_map
+        for track in result["data"]["stm_track"]:
+            track_map.update({track["track_name"]: track["track_id"]})
+        self.state.tracks = track_map
 
-    def SetLinkTypeMap(self, api_call):
+    def set_link_type_map(self):
         query = "query getLinkType { stm_link_type { id name } }"
         try:
-            result = api_call.call(query=query, query_variables={})
-        except Exception:
-            logger = getFwoLogger()
-            logger.error("Error while getting stm_link_type")
-            raise
-        
+            result = self.api_call.call(query=query, query_variables={})
+        except Exception as e:
+            FWOLogger.error(f"Error while getting stm_link_type: {e!s}")
+            raise FwoImporterError(f"Error while getting stm_link_type: {e!s}")
+
         link_map: dict[str, int] = {}
-        for track in result['data']['stm_link_type']:
-            link_map.update({track['name']: track['id']})
-        self.LinkTypes = link_map
+        for track in result["data"]["stm_link_type"]:
+            link_map.update({track["name"]: track["id"]})
+        self.state.link_types = link_map
 
-    def SetColorRefMap(self, api_call):
-        get_colors_query = FwoApi.get_graphql_code([graphql_query_path + "stmTables/getColors.graphql"])
+    def set_color_ref_map(self):
+        get_colors_query = FwoApi.get_graphql_code([GRAPHQL_QUERY_PATH + "stmTables/getColors.graphql"])
 
         try:
-            result = api_call.call(query=get_colors_query, query_variables={})
-        except Exception:
-            logger = getFwoLogger()
-            logger.error('Error while getting stm_color')
-            raise
-        
+            result = self.api_call.call(query=get_colors_query, query_variables={})
+        except Exception as e:
+            FWOLogger.error(f"Error while getting stm_color: {e!s}")
+            raise FwoImporterError(f"Error while getting stm_color: {e!s}")
+
         color_map: dict[str, int] = {}
-        for color in result['data']['stm_color']:
-            color_map.update({color['color_name']: color['color_id']})
-        self.ColorMap = color_map
+        for color in result["data"]["stm_color"]:
+            color_map.update({color["color_name"]: color["color_id"]})
+        self.state.color_map = color_map
 
-
-    # limited to the current mgm_id
-    # creates a dict with key = rulebase.name and value = rulebase.id
-    def SetRulebaseMap(self, api_call):
-
-        # TODO: maps need to be updated directly after data changes
-        query = """query getRulebaseMap($mgmId: Int) { rulebase(where:{mgm_id: {_eq: $mgmId}, removed:{_is_null:true }}) { id name uid } }"""
+    def set_network_obj_type_map(self):
+        query = "query getNetworkObjTypeMap { stm_obj_typ { obj_typ_name obj_typ_id } }"
         try:
-            result = api_call.call(query=query, query_variables= {"mgmId": self.MgmDetails.Id})
-        except Exception:
-            logger = getFwoLogger()
-            logger.error("Error while getting rulebases")
-            self.RulebaseMap = {}
-            raise
-        
-        m = {}
-        for rulebase in result['data']['rulebase']:
-            rbid = rulebase['id']
-            m.update({rulebase['name']: rbid})
-            m.update({rulebase['uid']: rbid})
-        self.RulebaseMap = m
+            result = self.api_call.call(query=query, query_variables={})
+        except Exception as e:
+            FWOLogger.error(f"Error while getting stm_obj_typ: {e!s}")
+            raise FwoImporterError(f"Error while getting stm_obj_typ: {e!s}")
 
-    # limited to the current mgm_id
-    # creats a dict with key = rule.uid and value = rule.id 
-    # should be called sparsely, as there might be a lot of rules for a mgmt
-    def SetRuleMap(self, api_call):
-        query = """query getRuleMap($mgmId: Int) { rule(where:{mgm_id: {_eq: $mgmId}, removed:{_is_null:true }}) { rule_id rule_uid } }"""
+        nwobj_type_map: dict[str, int] = {}
+        for nw_type in result["data"]["stm_obj_typ"]:
+            nwobj_type_map.update({nw_type["obj_typ_name"]: nw_type["obj_typ_id"]})
+        self.state.network_obj_type_map = nwobj_type_map
+
+    def set_service_obj_type_map(self):
+        query = "query getServiceObjTypeMap { stm_svc_typ { svc_typ_name svc_typ_id } }"
         try:
-            result = api_call.call(query=query, query_variables= {"mgmId": self.MgmDetails.Id})
-        except Exception:
-            logger = getFwoLogger()
-            logger.error("Error while getting rules")
-            self.RuleMap = {}
-            raise
-        
-        m = {}
-        for rule in result['data']['rule']:
-            m.update({rule['rule_uid']: rule['rule_id']})
-        self.RuleMap = m
+            result = self.api_call.call(query=query, query_variables={})
+        except Exception as e:
+            FWOLogger.error(f"Error while getting stm_svc_typ: {e!s}")
+            raise FwoImporterError(f"Error while getting stm_svc_typ: {e!s}")
+
+        svc_type_map: dict[str, int] = {}
+        for svc_type in result["data"]["stm_svc_typ"]:
+            svc_type_map.update({svc_type["svc_typ_name"]: svc_type["svc_typ_id"]})
+        self.state.service_obj_type_map = svc_type_map
+
+    def set_user_obj_type_map(self):
+        query = "query getUserObjTypeMap { stm_usr_typ { usr_typ_name usr_typ_id } }"
+        try:
+            result = self.api_call.call(query=query, query_variables={})
+        except Exception as e:
+            FWOLogger.error(f"Error while getting stm_usr_typ: {e!s}")
+            raise FwoImporterError(f"Error while getting stm_usr_typ: {e!s}")
+
+        user_type_map: dict[str, int] = {}
+        for usr_type in result["data"]["stm_usr_typ"]:
+            user_type_map.update({usr_type["usr_typ_name"]: usr_type["usr_typ_id"]})
+        self.state.user_obj_type_map = user_type_map
+
+    def set_protocol_map(self):
+        query = "query getIpProtocols { stm_ip_proto { ip_proto_id ip_proto_name } }"
+        try:
+            result = self.api_call.call(query=query, query_variables={})
+        except Exception as e:
+            FWOLogger.error(f"Error while getting stm_ip_proto: {e!s}")
+            raise FwoImporterError(f"Error while getting stm_ip_proto: {e!s}")
+
+        protocol_map: dict[str, int] = {}
+        for proto in result["data"]["stm_ip_proto"]:
+            protocol_map.update({proto["ip_proto_name"].lower(): proto["ip_proto_id"]})
+        self.state.protocol_map = protocol_map
 
     # getting all gateways (not limitited to the current mgm_id) to support super managements
     # creates a dict with key = gateway.uid  and value = gateway.id
     # and also            key = gateway.name and value = gateway.id
-    def SetGatewayMap(self, api_call):
+    def set_gateway_map(self):
         query = """
-            query getGatewayMap($mgmId: Int) {
+            query getGatewayMap {
                 device {
+                    mgm_id
                     dev_id
-                    dev_name
                     dev_uid
                 }
             }
     """
         try:
-            result = api_call.call(query=query, query_variables={})
+            result = self.api_call.call(query=query, query_variables={})
         except Exception:
-            logger = getFwoLogger()
-            logger.error("Error while getting gateways")
-            self.GatewayMap = {}
-            raise
-        
+            FWOLogger.error("Error while getting gateways")
+            self.state.gateway_map = {}
+            raise FwoImporterError("Error while getting gateways")
+
         m = {}
-        for gw in result['data']['device']:
-            m.update({gw['dev_name']: gw['dev_id']})
-            m.update({gw['dev_uid']: gw['dev_id']})
-        self.GatewayMap = m
+        for gw in result["data"]["device"]:
+            if gw["mgm_id"] not in m:
+                m[gw["mgm_id"]] = {}
+            m[gw["mgm_id"]][gw["dev_uid"]] = gw["dev_id"]
+        self.state.gateway_map = m
 
     # getting all managements (not limitited to the current mgm_id) to support super managements
     # creates a dict with key = management.uid  and value = management.id
-    def SetManagementMap(self, api_call):
+    def set_management_map(self):
         query = """
             query getManagementMap($mgmId: Int!) {
                 management(where: {mgm_id: {_eq: $mgmId}}) {
@@ -321,71 +306,32 @@ class ImportStateController(ImportState):
             }
         """
         try:
-            result = api_call.call(query=query, query_variables= {"mgmId": self.MgmDetails.Id})
+            result = self.api_call.call(query=query, query_variables={"mgmId": self.state.mgm_details.mgm_id})
         except Exception:
-            logger = getFwoLogger()
-            logger.error("Error while getting managements")
-            self.ManagementMap = {}
-            raise
-        
-        m = {}
-        mgm = result['data']['management'][0]
-        m.update({mgm['mgm_uid']: mgm['mgm_id']})
-        for sub_mgr in mgm['sub_managers']:
-            m.update({sub_mgr['mgm_uid']: sub_mgr['mgm_id']})
+            FWOLogger.error("Error while getting managements")
+            self.state.management_map = {}
+            raise FwoImporterError("Error while getting managements")
 
-        self.ManagementMap = m
+        m: dict[str, int] = {}
+        mgm = result["data"]["management"][0]
+        m.update({mgm["mgm_uid"]: mgm["mgm_id"]})
+        for sub_mgr in mgm["sub_managers"]:
+            m.update({sub_mgr["mgm_uid"]: sub_mgr["mgm_id"]})
 
-    def lookupRule(self, ruleUid):
-        return self.RuleMap.get(ruleUid, None)
-
-    def lookupAction(self, actionStr):
-        return self.Actions.get(actionStr.lower(), None)
-
-    def lookupTrack(self, trackStr):
-        return self.Tracks.get(trackStr.lower(), None)
-
-    def lookupRulebaseId(self, rulebaseUid):
-        rulebaseId = self.RulebaseMap.get(rulebaseUid, None)
-        if rulebaseId is None:
-            logger = getFwoLogger()
-            logger.error(f"Rulebase {rulebaseUid} not found")
-        return rulebaseId
-
-    def lookupLinkType(self, linkUid):
-        return self.LinkTypes.get(linkUid, -1)
-
-    def lookupGatewayId(self, gwUid):
-        return self.GatewayMap.get(gwUid, None)
-
-    def lookupManagementId(self, mgmUid):
-        if not self.ManagementMap.get(mgmUid, None):
-            logger = getFwoLogger()
-            logger.error(f"fwo_api:import_latest_config - no mgm id found for current manager uid '{mgmUid}'")
-        return self.ManagementMap.get(mgmUid, None)
-
-
-    def lookupColorId(self, color_str):
-        return self.ColorMap.get(color_str, 1)  # 1 = forground color black
-    
+        self.state.management_map = m
 
     def delete_import(self):
-        logger = getFwoLogger()
-
         delete_import_mutation = """
             mutation deleteImport($importId: bigint!) {
                 delete_import_control(where: {control_id: {_eq: $importId}}) { affected_rows }
             }"""
 
         try:
-            result = self.api_connection.call(delete_import_mutation, query_variables={"importId": self.ImportId})
-            api_changes = result['data']['delete_import_control']['affected_rows']
+            result = self.api_connection.call(
+                delete_import_mutation,
+                query_variables={"importId": self.state.import_id},
+            )
+            _ = result["data"]["delete_import_control"]["affected_rows"]
+            FWOLogger.info(f"removed import with id {self.state.import_id!s} completely")
         except Exception:
-            logger.exception(
-                "fwo_api: failed to unlock import for import id " + str(self.ImportId))
-            return 1  # signaling an error
-        logger.info(f"removed import with id {str(self.ImportId)} completely")
-        if api_changes == 1:
-            return 0        # return code 0 is ok
-        else:
-            return 1
+            FWOLogger.exception("fwo_api: failed to unlock import for import id " + str(self.state.import_id))

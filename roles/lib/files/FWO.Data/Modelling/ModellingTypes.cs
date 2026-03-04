@@ -1,4 +1,4 @@
-﻿namespace FWO.Data.Modelling
+namespace FWO.Data.Modelling
 {
     public static class ModellingTypes
     {
@@ -21,7 +21,10 @@
             InitRequests = 9,
             Request = 10,
             Implement = 11,
-            Reject = 12
+            Reject = 12,
+            Decommission = 13,
+            Recertify = 14,
+            Publish = 15
         }
 
         public enum ModObjectType
@@ -43,26 +46,26 @@
 
         public static bool IsNwGroup(this ModObjectType objectType)
         {
-            switch(objectType)
+            switch (objectType)
             {
                 case ModObjectType.AppRole:
                 case ModObjectType.AppZone:
                 case ModObjectType.NetworkZone:
                 case ModObjectType.NetworkArea:
                     return true;
-                default: 
+                default:
                     return false;
             }
         }
 
         public static bool IsNwObject(this ModObjectType objectType)
         {
-            switch(objectType)
+            switch (objectType)
             {
                 case ModObjectType.AppServer:
                 case ModObjectType.Network:
                     return true;
-                default: 
+                default:
                     return false;
             }
         }

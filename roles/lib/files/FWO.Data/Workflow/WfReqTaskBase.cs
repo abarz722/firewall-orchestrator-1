@@ -1,13 +1,14 @@
-﻿using System.Text.Json.Serialization; 
+using FWO.Basics;
 using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace FWO.Data.Workflow
-{   
+{
     public enum AutoCreateImplTaskOptions
     {
-        never, 
-        onlyForOneDevice, 
-        forEachDevice, 
+        never,
+        onlyForOneDevice,
+        forEachDevice,
         enterInReqTask,
         afterPathAnalysis
     }
@@ -40,12 +41,12 @@ namespace FWO.Data.Workflow
         public int? ManagementId { get; set; }
 
         [JsonProperty("devices"), JsonPropertyName("devices")]
-        public string SelectedDevices 
-        {  
+        public string SelectedDevices
+        {
             get => System.Text.Json.JsonSerializer.Serialize<List<int>>(DeviceList) ?? throw new JsonException("DeviceList could not be parsed.");
             set
             {
-                if(value != null && value != "")
+                if (value != null && value != "")
                 {
                     DeviceList = System.Text.Json.JsonSerializer.Deserialize<List<int>>(value) ?? throw new JsonException("value could not be parsed.");
                 }
@@ -76,7 +77,7 @@ namespace FWO.Data.Workflow
         public void SetDeviceList(List<Device> devList)
         {
             DeviceList = [];
-            foreach(var dev in devList)
+            foreach (var dev in devList)
             {
                 DeviceList.Add(dev.Id);
             }
@@ -84,7 +85,7 @@ namespace FWO.Data.Workflow
 
         public int? GetAddInfoIntValue(string key)
         {
-            if(int.TryParse(GetAddInfoValue(key), out int value))
+            if (int.TryParse(GetAddInfoValue(key), out int value))
             {
                 return value;
             }
@@ -93,7 +94,7 @@ namespace FWO.Data.Workflow
 
         public int GetAddInfoIntValueOrZero(string key)
         {
-            if(int.TryParse(GetAddInfoValue(key), out int value))
+            if (int.TryParse(GetAddInfoValue(key), out int value))
             {
                 return value;
             }
@@ -122,13 +123,13 @@ namespace FWO.Data.Workflow
         public void SetAddInfo(string key, string newValue)
         {
             Dictionary<string, string>? addInfo = GetAddInfos();
-            if(addInfo == null)
+            if (addInfo == null)
             {
-                addInfo = new() { {key, newValue} };
+                addInfo = new() { { key, newValue } };
             }
             else
             {
-                if(!addInfo.TryAdd(key, newValue))
+                if (!addInfo.TryAdd(key, newValue))
                 {
                     addInfo[key] = newValue;
                 }
@@ -138,7 +139,7 @@ namespace FWO.Data.Workflow
 
         private Dictionary<string, string>? GetAddInfos()
         {
-            if(AdditionalInfo != null && AdditionalInfo != "")
+            if (AdditionalInfo != null && AdditionalInfo != "")
             {
                 return System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(AdditionalInfo);
             }
@@ -148,7 +149,7 @@ namespace FWO.Data.Workflow
         public override bool Sanitize()
         {
             bool shortened = base.Sanitize();
-            Reason = Sanitizer.SanitizeOpt(Reason, ref shortened);
+            Reason = Reason.SanitizeOpt(ref shortened);
             return shortened;
         }
     }

@@ -12,6 +12,8 @@ namespace FWO.Basics
         public const string kEnglish = "English";
         public const int kTenant0Id = 1;
 
+        public const int kSessionExpirationTimeDefault = 720; // 60 * 12
+
         public const int kSidebarLeftWidth = 300;
         public const int kGlobLibraryWidth = kSidebarLeftWidth + 400;
         public const int kObjLibraryWidth = kSidebarLeftWidth + 300;
@@ -20,7 +22,11 @@ namespace FWO.Basics
         public const int kHoursToMilliseconds = 3600000;
         public const int kMinutesToMilliseconds = 60000;
         public const int kSecondsToMilliseconds = 1000;
+        public const int kDaysPerWeek = 7;
         public const int kMaxPortNumber = 65535;
+        public const int kOwnerResponsibleTypeMain = 1;
+        public const int kOwnerResponsibleTypeSupporting = 2;
+        public const int kOwnerResponsibleTypeOptionalEscalation = 3;
 
         public const string kHtml = "html";
         public const string kPdf = "pdf";
@@ -34,7 +40,7 @@ namespace FWO.Basics
         public const string kImportAppData = "importAppData";
         public const string kAdjustAppServerNames = "adjustAppServerNames";
         public const string kImportAreaSubnetData = "importAreaSubnetData";
-		public const string kImportZoneMatrixData = "importZoneMatrixData";
+        public const string kImportZoneMatrixData = "importZoneMatrixData";
         public const string kVarianceAnalysis = "varianceAnalysis";
         public const string kManual = "manual";
         public const string kCSV_ = "CSV_";
@@ -50,7 +56,7 @@ namespace FWO.Basics
         public const string kModellerGroup = "ModellerGroup_";
         public const string kLdapGroupPattern = kModellerGroup + Placeholder.AppId;
         public const string kImportChangeNotify = "importChangeNotify";
-		public const string kExternalRequest = "externalRequest";
+        public const string kExternalRequest = "externalRequest";
         public const string kComplianceCheck = "complianceCheck";
         public const string kLdapInternalPostfix = "dc=" + kFwoProdName + ",dc=internal";
         public const int kLdapInternalId = 1;
@@ -73,6 +79,7 @@ namespace FWO.Basics
     {
         public const string ReportGeneration = "report/generation";
         public const string Certification = "certification";
+        public const string Modelling = "networkmodelling";
     }
 
     public struct ObjectType
@@ -107,6 +114,7 @@ namespace FWO.Basics
         public const string ImportIdEnd = "import_id_end";
         public const string ImportIdOld = "import_id_old";
         public const string ImportIdNew = "import_id_new";
+        public const string IncludeObjectsInChangesReport = "include_objects_in_changes_report";
         public const string MgmIds = "mgmIds";
         public const string MgmId = "mgmId";
         public const string ManagementId = "management_id";
@@ -126,16 +134,24 @@ namespace FWO.Basics
         public const string ACTION = "@@ACTION@@";
         public const string CHANGEACTION = "@@CHANGEACTION@@";
         public const string COMMENT = "@@COMMENT@@";
+        public const string CONN_NUMBER = "@@CONN_NUMBER@@";
+        public const string DAYS = "@@DAYS@@";
         public const string DESTINATIONS = "@@DESTINATIONS@@";
+        public const string FAIL_NUMBER = "@@FAIL_NUMBER@@";
         public const string GROUPNAME = "@@GROUPNAME@@";
+        public const string INTERFACE_LINK = "@@INTERFACE_LINK@@";
+        public const string INTERFACE_NAME = "@@INTERFACE_NAME@@";
         public const string IP = "@@IP@@";
         public const string MANAGEMENT_ID = "@@MANAGEMENT_ID@@";
         public const string MANAGEMENT_NAME = "@@MANAGEMENT_NAME@@";
         public const string MEMBERS = "@@MEMBERS@@";
+        public const string NEW_INTERFACE_LINK = "@@NEW_INTERFACE_LINK@@";
+        public const string NEW_INTERFACE_NAME = "@@NEW_INTERFACE_NAME@@";
         public const string OBJECT_DETAILS = "@@OBJECT_DETAILS@@";
         public const string OBJECTNAME = "@@OBJECTNAME@@";
         public const string OBJECT_TYPE = "@@OBJECT_TYPE@@";
         public const string OBJUPDSTATUS = "@@OBJUPDSTATUS@@";
+        public const string OK_NUMBER = "@@OK_NUMBER@@";
         public const string ONBEHALF = "@@ONBEHALF@@";
         public const string ORDERNAME = "@@ORDERNAME@@";
         public const string PORT = "@@PORT@@";
@@ -143,6 +159,11 @@ namespace FWO.Basics
         public const string PROTOCOLNAME = "@@PROTOCOLNAME@@";
         public const string PROTOCOLID = "@@PROTOCOLID@@";
         public const string REASON = "@@REASON@@";
+        public const string REQUESTDATE = "@@REQUESTDATE@@";
+        public const string REQUESTER = "@@REQUESTER@@";
+        public const string REQUESTING_APPNAME = "@@REQUESTING_APPNAME@@";
+        public const string REQUESTING_APPID = "@@REQUESTING_APPID@@";
+        public const string RULE_NUMBER = "@@RULE_NUMBER@@";
         public const string SERVICENAME = "@@SERVICENAME@@";
         public const string SERVICES = "@@SERVICES@@";
         public const string SOURCES = "@@SOURCES@@";
@@ -151,5 +172,28 @@ namespace FWO.Basics
         public const string TASKS = "@@TASKS@@";
         public const string TICKET_SUBJECT = "@@TICKET_SUBJECT@@";
         public const string TYPE = "@@TYPE@@";
+        public const string USER_NAME = "@@USER_NAME@@";
+    }
+
+    public enum OwnerMappingSourceStm
+    {
+        IpBased = 1,
+        CustomField = 2,
+        NameField = 3,
+        Manual = 4
+    }
+
+    public struct ImportType
+    {
+        public const int RULE = 1;
+        public const int OWNER = 2;
+        public const int ADMIN_VIA_REINITIALIZE_BTN = 3;
+    }
+
+    public struct ChangelogActionType
+    {
+        public const Char INSERT = 'I';
+        public const Char CHANGE = 'C';
+        public const Char DELETE = 'D';
     }
 }

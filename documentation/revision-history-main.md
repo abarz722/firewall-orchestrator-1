@@ -552,3 +552,50 @@ hotfix release
   - fixing services-other ip proto import
 - improved quality control with stricter automated checks
 - various fixes in modelling module
+
+# 8.8.8 - 23.08.2025 MAIN
+- add read-only db user fwo_ro
+- hadening changes 
+  - apache config (information leakage)
+  - listeners (hasura, postgres)
+  - log santisation
+# 8.9.1 - 02.10.2025 MAIN
+- owner-recertification
+
+# 8.9.2 - 17.10.2025 MAIN
+- add ownerLifeCycleState 
+- add manageable ownerLifeCycleState menu
+
+# 8.9.3 - 05.11.2025 MAIN
+- hotfix missing permissions for app data import in certain constellations
+
+## 8.9.4 - 09.12.2025 MAIN
+- bugfix release: common service connection not editable
+- new custom scripts for iiq and cmdb import
+
+
+## 8.9.5 - 10.12.2025 MAIN
+- bugfix release: modelling - change planning showed duplicate NA elements for rule delete requests
+
+## 8.9.6 - 05.01.2026 MAIN
+- new parameters for notifications
+
+# 9.0 - 27.01.2026 MAIN
+A complete 80K lines rework of FWO, including
+- database changes to deduplicate rules (rule to gateway mapping now 1:n by introducing rulebase and rulebase_link tables)
+- migrating import module from mixed python/pgsql to pure python
+
+# 9.0.1 - 07.02.2026 
+- update rule_owner table for REST api
+- update import_control to allow flexible tracking of different import types
+- generalized owner responsibles with configurable responsible types
+- add allow_write_access to responsible types to control modelling and recertification
+
+# 9.0.2 - 10.02.2026 DEVELOP
+- fix: chunking for cleanup importer
+
+# 9.0.4 - 13.02.2026 MAIN
+- maintenance release with explicit 9.0.4 upgrade step
+
+# 9.0.9 - 25.02.2026 DEVELOP
+- remove stale v8 code
