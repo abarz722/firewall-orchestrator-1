@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using FWO.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 
@@ -160,6 +161,9 @@ namespace FWO.Data.Workflow
 
         [JsonProperty("error_state"), JsonPropertyName("error_state")]
         public int? ErrorState { get; set; }
+
+        [JsonProperty("confirm_ui_message"), JsonPropertyName("confirm_ui_message")]
+        public bool ConfirmUiMessage { get; set; }
     }
 
     public class BundleTasksActionParams
@@ -179,7 +183,15 @@ namespace FWO.Data.Workflow
                 return new();
             }
 
-            return System.Text.Json.JsonSerializer.Deserialize<BundleTasksActionParams>(externalParams, SerializerOptions) ?? new();
+            try
+            {
+                return System.Text.Json.JsonSerializer.Deserialize<BundleTasksActionParams>(externalParams, SerializerOptions) ?? new();
+            }
+            catch (System.Text.Json.JsonException exception)
+            {
+                Log.WriteWarning("Bundle Tasks", $"Configured bundle task parameters are invalid JSON. Falling back to defaults. {exception.Message}");
+                return new();
+            }
         }
 
         public string ToExternalParams()

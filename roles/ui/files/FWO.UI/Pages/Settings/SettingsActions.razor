@@ -1,4 +1,4 @@
-﻿@using System.Text.Json
+@using System.Text.Json
 @using FWO.Config.Api.Data
 @using FWO.Data.Modelling
 @using FWO.Ui.Services
@@ -381,6 +381,14 @@
                                     </div>
                                 </div>
                             </div>
+                            <div class="col-sm-4">
+                                <div class="form-group row" data-toggle="tooltip" title="@(userConfig.PureLine("H5536"))">
+                                    <label class="col-sm-10 col-form-label col-form-label-sm" for="confirmCreateFlow">@(userConfig.GetText("confirm_flow_creation")):</label>
+                                    <div class="col-sm-2">
+                                        <input id="confirmCreateFlow" class="form-check-input mt-2" type="checkbox" @bind="actActionResultStateParams.ConfirmUiMessage" />
+                                    </div>
+                                </div>
+                            </div>
                             break;
                         case nameof(StateActionTypes.BundleTasks):
                             <div class="col-sm-4">
@@ -410,14 +418,14 @@
         </Body>
         <Footer>
             <div class="btn-group">
-                <AuthorizeView Roles="@($"{Roles.Admin}, {Roles.FwAdmin}")">
+                <ExecutionModeAuthorizeView Roles="@($"{Roles.Admin}, {Roles.FwAdmin}")">
                     <Authorized>
                         <button type="button" class="btn btn-sm btn-primary" @onclick="SaveAction">@(DisplayService.DisplayButton(userConfig, "save", Icons.Save))</button>
                     </Authorized>
                     <NotAuthorized>
                         <button type="button" class="btn btn-sm btn-primary" disabled>@(DisplayService.DisplayButton(userConfig, "save", Icons.Save))</button>
                     </NotAuthorized> 
-                </AuthorizeView>
+                </ExecutionModeAuthorizeView>
                 <button type="button" class="btn btn-sm btn-secondary" @onclick="Cancel">@(DisplayService.DisplayButton(userConfig, "cancel", Icons.Cancel))</button>
             </div>
         </Footer>
@@ -589,8 +597,12 @@ else
 
     private void LoadActionExternalParams(WfStateAction action)
     {
-        if (action.ExternalParams == "" || action.ExternalParams == "{}")
+        if (string.IsNullOrWhiteSpace(action.ExternalParams) || action.ExternalParams == "{}")
         {
+            if (action.ActionType == nameof(StateActionTypes.CreateFlow))
+            {
+                LoadCreateFlowParams(action.ExternalParams);
+            }
             return;
         }
 
@@ -661,6 +673,12 @@ else
 
     private void LoadCreateFlowParams(string externalParams)
     {
+        if (string.IsNullOrWhiteSpace(externalParams))
+        {
+            actActionResultStateParams = new();
+            return;
+        }
+
         actActionResultStateParams = JsonSerializer.Deserialize<ActionResultStateParams>(externalParams) ?? throw new JsonException("Extparams could not be parsed.");
     }
 
@@ -675,7 +693,7 @@ else
         selectedStateNotOk = statesPlus.Where(x => x.Id != ConditionalState.Id).FirstOrDefault(x => x.Id == actConditionalAutoPromoteParams.IfNotCompliantState) ?? AutomaticState;
         selectedSuccessState = states.FirstOrDefault(x => x.Id == actActionResultStateParams.SuccessState);
         selectedErrorState = states.FirstOrDefault(x => x.Id == actActionResultStateParams.ErrorState);
-        selectedUserGroup = userAndGroupList.FirstOrDefault(x => x.Dn == actApprovalParams.ApproverGroup);
+        selectedUserGroup = userAndGroupList.FirstOrDefault(x => DistName.DnEquals(x.Dn, actApprovalParams.ApproverGroup));
     }
 
     private async Task SaveAction()
@@ -938,7 +956,7 @@ else
     {
         actActionResultStateParams.SuccessState = selectedSuccessState?.Id;
         actActionResultStateParams.ErrorState = selectedErrorState?.Id;
-        return actActionResultStateParams.SuccessState != null || actActionResultStateParams.ErrorState != null
+        return actActionResultStateParams.SuccessState != null || actActionResultStateParams.ErrorState != null || actActionResultStateParams.ConfirmUiMessage
             ? JsonSerializer.Serialize(actActionResultStateParams)
             : "";
     }

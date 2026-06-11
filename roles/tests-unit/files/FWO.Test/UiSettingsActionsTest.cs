@@ -1,3 +1,4 @@
+using FWO.Api.Client;
 using FWO.Api.Client.Queries;
 using FWO.Data;
 using FWO.Data.Workflow;
@@ -18,7 +19,7 @@ namespace FWO.Test
             public string LastQuery { get; private set; } = "";
             public object? LastVariables { get; private set; }
 
-            public override Task<T> SendQueryAsync<T>(string query, object? variables = null, string? operationName = null)
+            public override Task<T> SendQueryAsync<T>(string query, object? variables = null, string? operationName = null, QueryChunkingOptions? chunkingOptions = null)
             {
                 LastQuery = query;
                 LastVariables = variables;
@@ -48,6 +49,14 @@ namespace FWO.Test
             Assert.That(parameters.BundleType, Is.EqualTo(BundleTaskType.TwoOutOfThree));
             Assert.That(action.ExternalParams, Does.Contain("bundle_type"));
             Assert.That(action.ExternalParams, Does.Contain(nameof(BundleTaskType.TwoOutOfThree)));
+        }
+
+        [Test]
+        public void BundleTasksActionParams_FallsBackToDefaultForInvalidJson()
+        {
+            BundleTasksActionParams parameters = BundleTasksActionParams.FromExternalParams("{invalid");
+
+            Assert.That(parameters.BundleType, Is.EqualTo(BundleTaskType.TwoOutOfThree));
         }
 
         [Test]
@@ -165,6 +174,24 @@ namespace FWO.Test
             Assert.That(result, Is.True);
             Assert.That(parameters.SuccessState, Is.EqualTo(21));
             Assert.That(parameters.ErrorState, Is.EqualTo(22));
+            Assert.That(parameters.ConfirmUiMessage, Is.False);
+        }
+
+        [Test]
+        public async Task TryUpdateExternalParams_SerializesCreateFlowConfirmationWithoutStates()
+        {
+            SettingsActions component = new();
+            WfStateAction action = new() { ActionType = StateActionTypes.CreateFlow.ToString() };
+            SetMember(component, "actAction", action);
+            SetMember(component, "actActionResultStateParams", new ActionResultStateParams { ConfirmUiMessage = true });
+
+            bool result = await InvokeTryUpdateExternalParams(component);
+
+            ActionResultStateParams parameters = JsonSerializer.Deserialize<ActionResultStateParams>(action.ExternalParams)!;
+            Assert.That(result, Is.True);
+            Assert.That(parameters.SuccessState, Is.Null);
+            Assert.That(parameters.ErrorState, Is.Null);
+            Assert.That(parameters.ConfirmUiMessage, Is.True);
         }
 
         [Test]
@@ -242,6 +269,27 @@ namespace FWO.Test
             Assert.That(knownState, Is.EqualTo("Implemented"));
             Assert.That(GetMember<string?>(component, "selectedModIntegrationState"), Is.Null);
             Assert.That(GetMember<bool>(component, "actConfirmUpdateModelling"), Is.True);
+        }
+
+        [Test]
+        public void LoadActionExternalParams_LoadsEmptyCreateFlowParamsAsDefaults()
+        {
+            SettingsActions component = new();
+            WfStateAction action = new()
+            {
+                ActionType = StateActionTypes.CreateFlow.ToString(),
+                ExternalParams = ""
+            };
+            SetMember(component, "actActionResultStateParams", new ActionResultStateParams { SuccessState = 21, ErrorState = 22 });
+
+            GetPrivateMethod("LoadActionExternalParams").Invoke(component, [action]);
+
+            ActionResultStateParams parameters = GetMember<ActionResultStateParams>(component, "actActionResultStateParams");
+            Assert.That(parameters.SuccessState, Is.Null);
+            Assert.That(parameters.ErrorState, Is.Null);
+            Assert.That(parameters.ConfirmUiMessage, Is.False);
+            Assert.That(GetMember<WfState?>(component, "selectedSuccessState"), Is.Null);
+            Assert.That(GetMember<WfState?>(component, "selectedErrorState"), Is.Null);
         }
 
         [Test]

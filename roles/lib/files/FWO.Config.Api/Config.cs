@@ -1,4 +1,5 @@
 using FWO.Api.Client;
+using FWO.Api.Client.ExceptionHandling;
 using FWO.Api.Client.Queries;
 using FWO.Config.Api.Data;
 using FWO.Logging;
@@ -57,7 +58,7 @@ namespace FWO.Config.Api
                 _configGraphQlSubscription = null;
 
                 List<string> ignoreKeys = []; // currently nothing ignored, may be used later
-                _configGraphQlSubscription = apiConnection.GetSubscription<ConfigItem[]>(SubscriptionExceptionHandler, SubscriptionUpdateHandler,
+                _configGraphQlSubscription = apiConnection.GetSubscription<ConfigItem[]>(GraphqlExceptionHandler.Handle, SubscriptionUpdateHandler,
                     ConfigQueries.subscribeConfigChangesByUser, new { UserId, ignoreKeys });
 
                 while (!Initialized)
@@ -168,6 +169,7 @@ namespace FWO.Config.Api
         public async Task WriteToDatabase(ConfigData editedData, ApiConnection apiConnection)
         {
             ThrowIfDisposed();
+            ConfigItem[] changedItems = [];
             await semaphoreSlim.WaitAsync();
             List<ConfigItem> configItemChanges = [];
             try
@@ -199,9 +201,49 @@ namespace FWO.Config.Api
                     }
                 }
                 // Update or insert all config item
-                await apiConnection.SendQueryAsync<object>(ConfigQueries.upsertConfigItems, new { config_items = configItemChanges });
+                if (configItemChanges.Count > 0)
+                {
+                    await apiConnection.SendQueryAsync<object>(ConfigQueries.upsertConfigItems, new { config_items = configItemChanges });
+                    changedItems = [.. configItemChanges];
+                    ApplyCommittedChanges(changedItems);
+                }
             }
             finally { semaphoreSlim.Release(); }
+
+            if (changedItems.Length > 0)
+            {
+                InvokeOnChange(this, changedItems);
+            }
+        }
+
+        /// <summary>
+        /// Applies successfully persisted configuration values to this in-memory config instance while the caller holds the semaphore.
+        /// </summary>
+        private void ApplyCommittedChanges(ConfigItem[] changedItems)
+        {
+            MergeRawConfigItems(changedItems);
+            Update(changedItems);
+        }
+
+        /// <summary>
+        /// Merges changed config items into the raw item cache while preserving existing entries.
+        /// </summary>
+        private void MergeRawConfigItems(ConfigItem[] changedItems)
+        {
+            List<ConfigItem> mergedItems = [.. RawConfigItems];
+            foreach (ConfigItem changedItem in changedItems)
+            {
+                int index = mergedItems.FindIndex(item => item.Key == changedItem.Key);
+                if (index >= 0)
+                {
+                    mergedItems[index] = changedItem;
+                }
+                else
+                {
+                    mergedItems.Add(changedItem);
+                }
+            }
+            RawConfigItems = [.. mergedItems];
         }
 
         public async Task<ConfigData> GetEditableConfig()
@@ -213,11 +255,6 @@ namespace FWO.Config.Api
                 return (ConfigData)CloneEditable();
             }
             finally { semaphoreSlim.Release(); }
-        }
-
-        protected static void SubscriptionExceptionHandler(Exception exception)
-        {
-            Log.WriteError("Config Subscription", "Config subscription lead to error.", exception);
         }
 
         protected void InvokeOnChange(Config config, ConfigItem[] configItems)

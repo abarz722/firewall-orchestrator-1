@@ -234,7 +234,8 @@ namespace FWO.Services.Workflow
                 OldStateId = statefulObject.StateChanged() ? statefulObject.ChangedFrom() : statefulObject.StateId,
                 NewStateId = statefulObject.StateId,
                 StateChangedByCreation = statefulObject.StateChangedByCreation(),
-                Phase = wfHandler.Phase.ToString()
+                Phase = wfHandler.Phase.ToString(),
+                ExecutionMode = wfHandler.userConfig.ExecutionMode
             };
         }
 
@@ -363,6 +364,12 @@ namespace FWO.Services.Workflow
             bool? success = await flowDbCreator.CreateFlowInFlowDb(action, statefulObject, scope, owner, ticketId);
             if (success != null)
             {
+                ActionResultStateParams? resultStateParams = TryLoadActionResultStateParams(action.ExternalParams);
+                if (resultStateParams?.ConfirmUiMessage == true)
+                {
+                    wfHandler.DisplayMessage(null, wfHandler.userConfig.GetText("CreateFlow"),
+                        wfHandler.userConfig.GetText((bool)success ? "flow_creation_succeeded" : "flow_creation_failed"), !(bool)success);
+                }
                 await PromoteAfterActionResult(action.ExternalParams, (bool)success, statefulObject, scope);
             }
         }
@@ -377,7 +384,7 @@ namespace FWO.Services.Workflow
             }
 
             BundleTasksActionParams bundleParams = BundleTasksActionParams.FromExternalParams(action.ExternalParams);
-            Dictionary<long, string> bundleAssignments = new RequestTaskBundler().BuildBundleAssignments(ticket.Tasks, bundleParams.BundleType, owner);
+            Dictionary<long, string> bundleAssignments = new RequestTaskBundler().BuildBundleAssignments(ticket.Tasks, bundleParams.BundleType);
             foreach (WfReqTask reqTask in ticket.Tasks.Where(task => task.Id > 0))
             {
                 string currentBundleId = reqTask.GetAddInfoValue(AdditionalInfoKeys.FlowBundleId);
@@ -416,7 +423,11 @@ namespace FWO.Services.Workflow
                 return;
             }
 
-            ActionResultStateParams resultStateParams = JsonSerializer.Deserialize<ActionResultStateParams>(externalParams) ?? new();
+            ActionResultStateParams? resultStateParams = TryLoadActionResultStateParams(externalParams);
+            if (resultStateParams == null)
+            {
+                return;
+            }
             int? toState = success ? resultStateParams.SuccessState : resultStateParams.ErrorState;
             if (toState == null)
             {
@@ -430,6 +441,24 @@ namespace FWO.Services.Workflow
             }
 
             await wfHandler.AutoPromote(statefulObject, scope, toState);
+        }
+
+        private static ActionResultStateParams? TryLoadActionResultStateParams(string externalParams)
+        {
+            if (string.IsNullOrWhiteSpace(externalParams))
+            {
+                return new();
+            }
+
+            try
+            {
+                return JsonSerializer.Deserialize<ActionResultStateParams>(externalParams) ?? new();
+            }
+            catch (JsonException exception)
+            {
+                Log.WriteWarning("Action result state", $"Configured action result parameters are invalid JSON. Skipping result-state promotion. {exception.Message}");
+                return null;
+            }
         }
 
         public async Task CallExternal(WfStateAction action)

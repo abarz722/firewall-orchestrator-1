@@ -16,6 +16,9 @@ namespace FWO.Test
     {
         private sealed class UserConfigApiConnection(ConfigItem[] configItems) : ApiConnection
         {
+            public int UpsertConfigCallCount { get; private set; }
+            public List<ConfigItem> LastConfigItems { get; private set; } = [];
+
             public override void SetAuthHeader(string jwt) { }
             public override void SetRole(string role) { }
             public override void SetBestRole(System.Security.Claims.ClaimsPrincipal user, List<string> targetRoleList) { }
@@ -27,7 +30,7 @@ namespace FWO.Test
                 throw new NotImplementedException();
             }
 
-            public override Task<QueryResponseType> SendQueryAsync<QueryResponseType>(string query, object? variables = null, string? operationName = null)
+            public override Task<QueryResponseType> SendQueryAsync<QueryResponseType>(string query, object? variables = null, string? operationName = null, FWO.Api.Client.QueryChunkingOptions? chunkingOptions = null)
             {
                 if (typeof(QueryResponseType) == typeof(ConfigItem[]) && query == ConfigQueries.getConfigItemsByUser)
                 {
@@ -36,6 +39,14 @@ namespace FWO.Test
                 if (typeof(QueryResponseType) == typeof(List<UiText>) && query == ConfigQueries.getCustomTextsPerLanguage)
                 {
                     return Task.FromResult((QueryResponseType)(object)new List<UiText>());
+                }
+                if (query == ConfigQueries.upsertConfigItems)
+                {
+                    UpsertConfigCallCount++;
+                    PropertyInfo configItemsProperty = variables?.GetType().GetProperty("config_items")
+                        ?? throw new ArgumentException("Missing config_items variable.");
+                    LastConfigItems = ((IEnumerable<ConfigItem>)configItemsProperty.GetValue(variables)!).ToList();
+                    return Task.FromResult(default(QueryResponseType)!);
                 }
                 throw new NotImplementedException();
             }
@@ -47,6 +58,11 @@ namespace FWO.Test
 
             public override void DisposeSubscriptions<T>() { }
             protected override void Dispose(bool disposing) { }
+
+            public override Task ReconnectSubscriptionsAsync(string jwt, CancellationToken ct)
+            {
+                throw new NotImplementedException();
+            }
         }
 
         [Test]
@@ -97,11 +113,81 @@ namespace FWO.Test
         }
 
         [Test]
+        public async Task WriteToDatabase_UpdatesCurrentConfigAfterPersistingChanges()
+        {
+            SimulatedGlobalConfig globalConfig = new()
+            {
+                WelcomeMessage = "old",
+                ImportSleepTime = 40,
+                RawConfigItems =
+                [
+                    new() { Key = "welcomeMessage", Value = "old", User = 0 },
+                    new() { Key = "importSleepTime", Value = "40", User = 0 }
+                ]
+            };
+            ConfigData editableConfig = await globalConfig.GetEditableConfig();
+            editableConfig.WelcomeMessage = "new";
+
+            using UserConfigApiConnection apiConnection = new([]);
+            await globalConfig.WriteToDatabase(editableConfig, apiConnection);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(apiConnection.UpsertConfigCallCount, Is.EqualTo(1));
+                Assert.That(apiConnection.LastConfigItems, Has.Count.EqualTo(1));
+                Assert.That(apiConnection.LastConfigItems[0].Key, Is.EqualTo("welcomeMessage"));
+                Assert.That(apiConnection.LastConfigItems[0].Value, Is.EqualTo("new"));
+                Assert.That(globalConfig.WelcomeMessage, Is.EqualTo("new"));
+                Assert.That(globalConfig.RawConfigItems.First(item => item.Key == "welcomeMessage").Value, Is.EqualTo("new"));
+                Assert.That(globalConfig.RawConfigItems.First(item => item.Key == "importSleepTime").Value, Is.EqualTo("40"));
+            });
+        }
+
+        [Test]
+        public async Task WriteToDatabase_NotifiesUserConfigSubscribersAfterPersistingChanges()
+        {
+            SimulatedGlobalConfig globalConfig = new()
+            {
+                OwnerSoruceMappingID = 0,
+                RawConfigItems =
+                [
+                    new() { Key = "OwnerSoruceMappingID", Value = "0", User = 0 }
+                ]
+            };
+            UserConfig userConfig = new(globalConfig);
+            ConfigData editableConfig = await globalConfig.GetEditableConfig();
+            editableConfig.OwnerSoruceMappingID = 2;
+
+            using UserConfigApiConnection apiConnection = new([]);
+            await globalConfig.WriteToDatabase(editableConfig, apiConnection);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(globalConfig.OwnerSoruceMappingID, Is.EqualTo(2));
+                Assert.That(userConfig.OwnerSoruceMappingID, Is.EqualTo(2));
+            });
+        }
+
+        [Test]
         public void DailyCheckSubscription_IncludesNotificationSettingsUsedByRunningJobs()
         {
             Assert.That(ConfigQueries.subscribeDailyCheckConfigChanges, Does.Contain("notificationLanguage"));
             Assert.That(ConfigQueries.subscribeDailyCheckConfigChanges, Does.Contain("ownerActiveRuleEmailBody"));
             Assert.That(ConfigQueries.subscribeDailyCheckConfigChanges, Does.Contain("ruleExpiryEmailBody"));
+        }
+
+        [Test]
+        public void FlowSyncSubscription_ContainsFlowSyncSleepTime()
+        {
+            Assert.That(ConfigQueries.subscribeFlowSyncConfigChanges, Does.Contain("flowSyncSleepTime"));
+        }
+
+        [Test]
+        public void ConfigData_DefaultsFlowSyncSleepTimeToDisabled()
+        {
+            ConfigData configData = new();
+
+            Assert.That(configData.FlowSyncSleepTime, Is.Zero);
         }
 
         [Test]
@@ -127,6 +213,14 @@ namespace FWO.Test
             ConfigData configData = new();
 
             Assert.That(configData.ModIntegrationStateMarker, Is.EqualTo(ModIntegrationStateConfig.DefaultMarker));
+        }
+
+        [Test]
+        public void ConfigData_DefaultsFlowNamingSourceRankingToAnEmptyList()
+        {
+            ConfigData configData = new();
+
+            Assert.That(configData.FlowNamingSourceManagementRanking, Is.EqualTo("[]"));
         }
 
         [Test]

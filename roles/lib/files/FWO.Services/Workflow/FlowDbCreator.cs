@@ -48,7 +48,7 @@ namespace FWO.Services.Workflow
 
         private static List<FlowCreationPayload> BuildTicketFlowPayloads(WfTicket ticket, FwoOwner? owner, long? ticketId)
         {
-            return [.. ticket.Tasks.Select(task => BuildRequestTaskFlowPayload(task, owner, ticketId ?? ticket.Id))];
+            return [.. ticket.Tasks.Where(IsFlowRelevantTask).Select(task => BuildRequestTaskFlowPayload(task, owner, ticketId ?? ticket.Id))];
         }
 
         private static FlowCreationPayload BuildRequestTaskFlowPayload(WfReqTask task, FwoOwner? owner, long? ticketId)
@@ -116,33 +116,42 @@ namespace FWO.Services.Workflow
 
         private async Task<bool?> PersistFlowCreationPayloads(List<FlowCreationPayload> payloads)
         {
-            FlowSyncFlowData context = await LoadFlowSyncData(payloads);
-            FlowGroupMaps groupMaps = BuildGroupMaps(context);
             int persistedPayloads = 0;
 
-            foreach (FlowCreationPayload payload in payloads.Where(IsGroupTask))
+            foreach (IGrouping<int, FlowCreationPayload> managementPayloads in payloads.GroupBy(GetManagementGroupId))
             {
-                if (await PersistGroupPayload(payload, context, groupMaps))
-                {
-                    persistedPayloads++;
-                }
-            }
+                List<FlowCreationPayload> groupedPayloads = [.. managementPayloads];
+                FlowSyncFlowData context = await LoadFlowSyncData(managementPayloads.Key);
+                FlowGroupMaps groupMaps = BuildGroupMaps(context);
 
-            foreach (FlowCreationPayload payload in payloads.Where(payload => !IsGroupTask(payload)))
-            {
-                if (await PersistAccessPayload(payload, context, groupMaps))
+                foreach (FlowCreationPayload payload in groupedPayloads.Where(IsGroupTask))
                 {
-                    persistedPayloads++;
+                    if (await PersistGroupPayload(payload, context, groupMaps))
+                    {
+                        persistedPayloads++;
+                    }
+                }
+
+                foreach (FlowCreationPayload payload in groupedPayloads.Where(payload => !IsGroupTask(payload)))
+                {
+                    if (await PersistAccessPayload(payload, context, groupMaps))
+                    {
+                        persistedPayloads++;
+                    }
                 }
             }
 
             Log.WriteInfo(LogMessageTitle, $"Persisted {persistedPayloads} of {payloads.Count} prepared Flow DB payloads.");
-            return persistedPayloads > 0;
+            return persistedPayloads == payloads.Count;
         }
 
-        private async Task<FlowSyncFlowData> LoadFlowSyncData(IEnumerable<FlowCreationPayload> payloads)
+        private static int GetManagementGroupId(FlowCreationPayload payload)
         {
-            int mgmId = payloads.Select(payload => payload.ManagementId).FirstOrDefault(id => id.HasValue) ?? 0;
+            return payload.ManagementId ?? 0;
+        }
+
+        private async Task<FlowSyncFlowData> LoadFlowSyncData(int mgmId)
+        {
             List<FlowNwObject> nwObjects = await apiConnection.SendQueryAsync<List<FlowNwObject>>(FlowQueries.getFlowSyncNwObjects, new { mgmId }) ?? [];
             List<FlowNwGroup> nwGroups = await apiConnection.SendQueryAsync<List<FlowNwGroup>>(FlowQueries.getFlowSyncNwGroups, new { mgmId }) ?? [];
             List<FlowSvcObject> svcObjects = await apiConnection.SendQueryAsync<List<FlowSvcObject>>(FlowQueries.getFlowSyncSvcObjects, new { mgmId }) ?? [];
@@ -172,7 +181,8 @@ namespace FWO.Services.Workflow
             string groupName = GetPayloadGroupName(payload);
             List<FlowObjectSnapshot> memberSnapshots = [.. payload.Sources.Concat(payload.Destinations).Where(IsActiveGroupMember)];
             List<FlowNetworkReference> members = await ResolveNetworkReferences(memberSnapshots, context, groupMaps, allowGroupNameReference: false);
-            if (string.IsNullOrWhiteSpace(groupName) || members.Count == 0 || members.Any(member => !member.ObjectId.HasValue))
+            if (string.IsNullOrWhiteSpace(groupName) || members.Count == 0 || members.Count != memberSnapshots.Count
+                || members.Any(member => !member.ObjectId.HasValue))
             {
                 Log.WriteWarning(LogMessageTitle, $"Skipping network group Flow DB payload for requestTaskIds={string.Join(",", payload.OriginRequestTaskIds)} because group name or member flow data is incomplete.");
                 return false;
@@ -216,7 +226,8 @@ namespace FWO.Services.Workflow
             string groupName = GetPayloadGroupName(payload);
             List<FlowServiceSnapshot> memberSnapshots = [.. payload.Services.Where(IsActiveGroupMember)];
             List<FlowServiceReference> members = await ResolveServiceReferences(memberSnapshots, context, groupMaps, allowGroupNameReference: false);
-            if (string.IsNullOrWhiteSpace(groupName) || members.Count == 0 || members.Any(member => !member.ObjectId.HasValue))
+            if (string.IsNullOrWhiteSpace(groupName) || members.Count == 0 || members.Count != memberSnapshots.Count
+                || members.Any(member => !member.ObjectId.HasValue))
             {
                 Log.WriteWarning(LogMessageTitle, $"Skipping service group Flow DB payload for requestTaskIds={string.Join(",", payload.OriginRequestTaskIds)} because group name or member flow data is incomplete.");
                 return false;
@@ -269,6 +280,10 @@ namespace FWO.Services.Workflow
             }
 
             long accessId = await ResolveAccessId(payload, sources, destinations, services, context);
+            await UpdateNetworkElementFlowIds(payload.Sources, sources);
+            await UpdateNetworkElementFlowIds(payload.Destinations, destinations);
+            await UpdateServiceElementFlowIds(payload.Services, services);
+
             foreach (long requestTaskId in payload.OriginRequestTaskIds.Distinct())
             {
                 await apiConnection.SendQueryAsync<ReturnId>(RequestQueries.updateRequestTaskFlowId, new { id = requestTaskId, flowAccessId = accessId });
@@ -298,19 +313,76 @@ namespace FWO.Services.Workflow
         {
             if (snapshot.FlowNetworkObjectId.HasValue)
             {
-                return context.NwObjectsById.TryGetValue(snapshot.FlowNetworkObjectId.Value, out FlowNwObject? flowObject)
-                    ? FlowNetworkReference.FromObject(flowObject!)
-                    : null;
+                return TryResolveNetworkObjectId(snapshot, context);
             }
             if (snapshot.FlowNetworkGroupId.HasValue)
             {
-                return TryBuildNetworkGroupReference(snapshot.FlowNetworkGroupId.Value, context);
+                return TryResolveNetworkGroupId(snapshot, context);
             }
-            if (allowGroupNameReference && IsNetworkGroupReference(snapshot) && groupMaps.NetworkGroups.TryGetValue(snapshot.GroupName!, out FlowNetworkReference? mappedGroup))
+            return TryResolveOriginalNetworkObject(snapshot, context)
+                ?? TryResolveNetworkGroupName(snapshot, groupMaps, allowGroupNameReference)
+                ?? await ResolveOrCreateNetworkObject(snapshot, context);
+        }
+
+        private static FlowNetworkReference? TryResolveNetworkObjectId(FlowObjectSnapshot snapshot, FlowSyncFlowData context)
+        {
+            if (!snapshot.FlowNetworkObjectId.HasValue)
+            {
+                return null;
+            }
+            if (context.NwObjectsById.TryGetValue(snapshot.FlowNetworkObjectId.Value, out FlowNwObject? flowObject))
+            {
+                return FlowNetworkReference.FromObject(flowObject!);
+            }
+            Log.WriteWarning(LogMessageTitle, $"Could not resolve Flow network object id {snapshot.FlowNetworkObjectId.Value} for workflow element {snapshot.WorkflowElementId}.");
+            return null;
+        }
+
+        private static FlowNetworkReference? TryResolveNetworkGroupId(FlowObjectSnapshot snapshot, FlowSyncFlowData context)
+        {
+            if (!snapshot.FlowNetworkGroupId.HasValue)
+            {
+                return null;
+            }
+            FlowNetworkReference? groupReference = TryBuildNetworkGroupReference(snapshot.FlowNetworkGroupId.Value, context);
+            if (groupReference == null)
+            {
+                Log.WriteWarning(LogMessageTitle, $"Could not resolve Flow network group id {snapshot.FlowNetworkGroupId.Value} for workflow element {snapshot.WorkflowElementId}.");
+            }
+            return groupReference;
+        }
+
+        private static FlowNetworkReference? TryResolveOriginalNetworkObject(FlowObjectSnapshot snapshot, FlowSyncFlowData context)
+        {
+            if (!snapshot.OriginalNetworkObjectId.HasValue)
+            {
+                return null;
+            }
+            if (context.NwObjectHashes.TryGetValue(snapshot.OriginalNetworkObjectId.Value, out string? originalObjectHash)
+                && context.NwObjects.TryGetValue(originalObjectHash, out FlowNwObject? originalFlowObject))
+            {
+                return FlowNetworkReference.FromObject(originalFlowObject!);
+            }
+            return null;
+        }
+
+        private static FlowNetworkReference? TryResolveNetworkGroupName(FlowObjectSnapshot snapshot, FlowGroupMaps groupMaps, bool allowGroupNameReference)
+        {
+            if (!allowGroupNameReference || !IsNetworkGroupReference(snapshot))
+            {
+                return null;
+            }
+            if (groupMaps.NetworkGroups.TryGetValue(snapshot.GroupName!, out FlowNetworkReference? mappedGroup))
             {
                 return mappedGroup;
             }
-            if (string.IsNullOrWhiteSpace(snapshot.Ip) && string.IsNullOrWhiteSpace(snapshot.Name))
+            Log.WriteWarning(LogMessageTitle, $"Could not resolve Flow network group '{snapshot.GroupName}' for workflow element {snapshot.WorkflowElementId}.");
+            return null;
+        }
+
+        private async Task<FlowNetworkReference?> ResolveOrCreateNetworkObject(FlowObjectSnapshot snapshot, FlowSyncFlowData context)
+        {
+            if (!CanCreateNetworkObject(snapshot))
             {
                 return null;
             }
@@ -337,6 +409,17 @@ namespace FWO.Services.Workflow
             FlowNwObject inserted = (await apiConnection.SendQueryAsync<FlowNwObjectInsertResult>(FlowQueries.insertFlowNwObjects, new { objects = new[] { insert } })).Returning.First();
             context.Add(inserted);
             return FlowNetworkReference.FromObject(inserted);
+        }
+
+        private static bool CanCreateNetworkObject(FlowObjectSnapshot snapshot)
+        {
+            if (!string.IsNullOrWhiteSpace(snapshot.Ip) || !string.IsNullOrWhiteSpace(snapshot.Name))
+            {
+                return true;
+            }
+            string originalObjectMessage = snapshot.OriginalNetworkObjectId.HasValue ? $" selected network object id {snapshot.OriginalNetworkObjectId.Value}," : "";
+            Log.WriteWarning(LogMessageTitle, $"Could not resolve network element {snapshot.WorkflowElementId}:{originalObjectMessage} no matching Flow object/group and no IP or name for creating a Flow object.");
+            return false;
         }
 
         private static FlowNetworkReference? TryBuildNetworkGroupReference(long groupId, FlowSyncFlowData context)
@@ -378,26 +461,84 @@ namespace FWO.Services.Workflow
         {
             if (snapshot.FlowServiceObjectId.HasValue)
             {
-                return context.SvcObjectsById.TryGetValue(snapshot.FlowServiceObjectId.Value, out FlowSvcObject? flowObject)
-                    ? FlowServiceReference.FromObject(flowObject!)
-                    : null;
+                return TryResolveServiceObjectId(snapshot, context);
             }
             if (snapshot.FlowServiceGroupId.HasValue)
             {
-                return TryBuildServiceGroupReference(snapshot.FlowServiceGroupId.Value, context);
+                return TryResolveServiceGroupId(snapshot, context);
             }
-            if (allowGroupNameReference && IsServiceGroupReference(snapshot) && groupMaps.ServiceGroups.TryGetValue(snapshot.GroupName!, out FlowServiceReference? mappedGroup))
+            return TryResolveOriginalServiceObject(snapshot, context)
+                ?? TryResolveServiceGroupName(snapshot, groupMaps, allowGroupNameReference)
+                ?? await ResolveOrCreateServiceObject(snapshot, context);
+        }
+
+        private static FlowServiceReference? TryResolveServiceObjectId(FlowServiceSnapshot snapshot, FlowSyncFlowData context)
+        {
+            if (!snapshot.FlowServiceObjectId.HasValue)
+            {
+                return null;
+            }
+            if (context.SvcObjectsById.TryGetValue(snapshot.FlowServiceObjectId.Value, out FlowSvcObject? flowObject))
+            {
+                return FlowServiceReference.FromObject(flowObject!);
+            }
+            Log.WriteWarning(LogMessageTitle, $"Could not resolve Flow service object id {snapshot.FlowServiceObjectId.Value} for workflow element {snapshot.WorkflowElementId}.");
+            return null;
+        }
+
+        private static FlowServiceReference? TryResolveServiceGroupId(FlowServiceSnapshot snapshot, FlowSyncFlowData context)
+        {
+            if (!snapshot.FlowServiceGroupId.HasValue)
+            {
+                return null;
+            }
+            FlowServiceReference? groupReference = TryBuildServiceGroupReference(snapshot.FlowServiceGroupId.Value, context);
+            if (groupReference == null)
+            {
+                Log.WriteWarning(LogMessageTitle, $"Could not resolve Flow service group id {snapshot.FlowServiceGroupId.Value} for workflow element {snapshot.WorkflowElementId}.");
+            }
+            return groupReference;
+        }
+
+        private static FlowServiceReference? TryResolveOriginalServiceObject(FlowServiceSnapshot snapshot, FlowSyncFlowData context)
+        {
+            if (!snapshot.OriginalServiceId.HasValue)
+            {
+                return null;
+            }
+            if (context.SvcObjectHashes.TryGetValue(snapshot.OriginalServiceId.Value, out string? originalServiceHash)
+                && context.SvcObjects.TryGetValue(originalServiceHash, out FlowSvcObject? originalFlowObject))
+            {
+                return FlowServiceReference.FromObject(originalFlowObject!);
+            }
+            return null;
+        }
+
+        private static FlowServiceReference? TryResolveServiceGroupName(FlowServiceSnapshot snapshot, FlowGroupMaps groupMaps, bool allowGroupNameReference)
+        {
+            if (!allowGroupNameReference || !IsServiceGroupReference(snapshot))
+            {
+                return null;
+            }
+            if (groupMaps.ServiceGroups.TryGetValue(snapshot.GroupName!, out FlowServiceReference? mappedGroup))
             {
                 return mappedGroup;
             }
-            if (!snapshot.ProtoId.HasValue)
+            Log.WriteWarning(LogMessageTitle, $"Could not resolve Flow service group '{snapshot.GroupName}' for workflow element {snapshot.WorkflowElementId}.");
+            return null;
+        }
+
+        private async Task<FlowServiceReference?> ResolveOrCreateServiceObject(FlowServiceSnapshot snapshot, FlowSyncFlowData context)
+        {
+            if (!CanCreateServiceObject(snapshot))
             {
                 return null;
             }
 
+            int protoId = snapshot.ProtoId!.Value;
             int? portEnd = snapshot.PortEnd ?? snapshot.Port;
             string hash = snapshot.Port.HasValue && portEnd.HasValue
-                ? FlowHashGenerator.GenerateSvcObjectHash(snapshot.ProtoId.Value, snapshot.Port.Value, portEnd.Value)
+                ? FlowHashGenerator.GenerateSvcObjectHash(protoId, snapshot.Port.Value, portEnd.Value)
                 : FlowHashGenerator.GenerateRandomHash();
             if (context.SvcObjects.TryGetValue(hash, out FlowSvcObject? existingObject))
             {
@@ -409,7 +550,7 @@ namespace FWO.Services.Workflow
                 Name = BuildServiceObjectName(snapshot),
                 PortStart = snapshot.Port,
                 PortEnd = portEnd,
-                IpProtoId = snapshot.ProtoId.Value,
+                IpProtoId = protoId,
                 SvcObjHash = hash,
                 State = FlowState.Requested,
                 RemovedDate = null,
@@ -418,6 +559,17 @@ namespace FWO.Services.Workflow
             FlowSvcObject inserted = (await apiConnection.SendQueryAsync<FlowSvcObjectInsertResult>(FlowQueries.insertFlowSvcObjects, new { objects = new[] { insert } })).Returning.First();
             context.Add(inserted);
             return FlowServiceReference.FromObject(inserted);
+        }
+
+        private static bool CanCreateServiceObject(FlowServiceSnapshot snapshot)
+        {
+            if (snapshot.ProtoId.HasValue)
+            {
+                return true;
+            }
+            string originalServiceMessage = snapshot.OriginalServiceId.HasValue ? $" selected service id {snapshot.OriginalServiceId.Value}," : "";
+            Log.WriteWarning(LogMessageTitle, $"Could not resolve service element {snapshot.WorkflowElementId}:{originalServiceMessage} no matching Flow service object/group and no protocol for creating a Flow service object.");
+            return false;
         }
 
         private static FlowServiceReference? TryBuildServiceGroupReference(long groupId, FlowSyncFlowData context)
@@ -518,6 +670,14 @@ namespace FWO.Services.Workflow
             return payload.TaskType == WfTaskType.group_create.ToString()
                 || payload.TaskType == WfTaskType.group_modify.ToString()
                 || payload.TaskType == WfTaskType.group_delete.ToString();
+        }
+
+        private static bool IsFlowRelevantTask(WfReqTask task)
+        {
+            return task.TaskType == WfTaskType.access.ToString()
+                || task.TaskType == WfTaskType.group_create.ToString()
+                || task.TaskType == WfTaskType.group_modify.ToString()
+                || task.TaskType == WfTaskType.group_delete.ToString();
         }
 
         private static bool IsActiveGroupMember(FlowObjectSnapshot snapshot)
