@@ -209,7 +209,7 @@ namespace FWO.Data
                 NotificationClient.Recertification => [NotificationDeadline.RecertDate],
                 NotificationClient.ImportChange => [NotificationDeadline.None],
                 NotificationClient.RuleTimer => [NotificationDeadline.RuleExpiry],
-                NotificationClient.InterfaceRequest => [NotificationDeadline.RequestDate],
+                NotificationClient.InterfaceRequest => [NotificationDeadline.None, NotificationDeadline.RequestDate],
                 NotificationClient.AppDecomm => [NotificationDeadline.None, NotificationDeadline.DecommissionDate],
                 NotificationClient.WfAction => [NotificationDeadline.None],
                 _ => Enum.GetValues(typeof(NotificationDeadline)).Cast<NotificationDeadline>().ToList()

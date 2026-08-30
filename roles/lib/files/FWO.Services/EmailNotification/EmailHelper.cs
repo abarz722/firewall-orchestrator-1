@@ -74,17 +74,24 @@ namespace FWO.Services
             ScopedUserEmailBcc = scopedUserEmailBcc;
         }
 
-        public virtual async Task<bool> SendEmailToOwnerResponsibles(FwoOwner owner, string subject, string body, EmailRecipientOption recOpt, bool reqInCc = false)
+        /// <summary>
+        /// Sends a notification email using the notification recipient fields.
+        /// </summary>
+        /// <param name="notification">Notification template and recipient configuration.</param>
+        /// <param name="owner">Owner context used to resolve configured responsibles.</param>
+        /// <param name="subject">Rendered notification subject.</param>
+        /// <param name="body">Rendered notification body.</param>
+        /// <returns>True when an email was sent; otherwise false.</returns>
+        public virtual async Task<bool> SendEmailToNotificationRecipients(FwoNotification notification, FwoOwner? owner, string subject, string body)
         {
-            List<string>? requester = reqInCc ? new() { GetEmailAddress(userConfig.User.Dn) } : null;
-            return await SendEmail(await GetRecipients(recOpt, null, owner, null, null), subject, body, requester);
-        }
-
-        public virtual async Task<bool> SendEmailToOwnerResponsibles(FwoOwner owner, string subject, string body, string recipientConfig, bool reqInCc = false, List<string>? otherAddresses = null)
-        {
-            List<string>? requester = reqInCc ? new() { GetEmailAddress(userConfig.User.Dn) } : null;
-            List<string> recipients = await GetRecipients(recipientConfig, owner, otherAddresses);
-            return await SendEmail(recipients, subject, body, requester);
+            List<string> tos = await GetNotificationRecipients(notification.RecipientTo, notification.EmailAddressTo, owner);
+            List<string>? ccs = notification.RecipientCc == EmailRecipientOption.None
+                ? null
+                : await GetNotificationRecipients(notification.RecipientCc, notification.EmailAddressCc, owner);
+            List<string>? bccs = notification.RecipientBcc == EmailRecipientOption.None
+                ? null
+                : await GetNotificationRecipients(notification.RecipientBcc, notification.EmailAddressBcc, owner);
+            return await SendEmail(tos, subject, body, ccs, bccs, notification.Layout == NotificationLayout.HtmlInBody);
         }
 
         /// <summary>
@@ -135,7 +142,7 @@ namespace FWO.Services
             return new WfStatefulObject(statefulObject) { AssignedGroup = assignedGroupDn };
         }
 
-        private async Task<bool> SendEmail(List<string> tos, string subject, string body, List<string>? ccs = null, List<string>? bccs = null,
+        protected virtual async Task<bool> SendEmail(List<string> tos, string subject, string body, List<string>? ccs = null, List<string>? bccs = null,
             bool mailFormatHtml = true, FormFile? attachment = null)
         {
             EmailConnection emailConnection = new(userConfig.EmailServerAddress, userConfig.EmailPort,
@@ -244,6 +251,7 @@ namespace FWO.Services
 
             HashSet<string> recipients = new(StringComparer.OrdinalIgnoreCase);
             AddOtherAddresses(selection, otherAddresses, recipients);
+            AddRequesterRecipients(selection, recipients);
             if (owner != null)
             {
                 await AddOwnerTypeRecipients(owner, selection.OwnerResponsibleTypeIds.Distinct(), recipients);
@@ -259,12 +267,38 @@ namespace FWO.Services
             return await GetRecipients(selection, owner, otherAddresses);
         }
 
+        private async Task<List<string>> GetNotificationRecipients(EmailRecipientOption recipientOption, string addressList, FwoOwner? owner)
+        {
+            if (recipientOption == EmailRecipientOption.ConfiguredResponsibles)
+            {
+                return await GetRecipients(addressList, owner, null);
+            }
+            if (recipientOption == EmailRecipientOption.OtherAddresses && LooksLikeRecipientSelectionJson(addressList))
+            {
+                return await GetRecipients(addressList, null, null);
+            }
+            return await GetRecipients(recipientOption, null, owner, null, SplitAddresses(addressList));
+        }
+
+        private static bool LooksLikeRecipientSelectionJson(string? recipientValue)
+        {
+            return recipientValue?.TrimStart().StartsWith('{') == true;
+        }
+
         private static void AddOtherAddresses(EmailRecipientSelection selection, List<string>? otherAddresses, HashSet<string> recipients)
         {
             if (selection.OtherAddresses)
             {
                 AddAddresses(recipients, selection.OtherAddressList);
                 AddAddresses(recipients, otherAddresses);
+            }
+        }
+
+        private void AddRequesterRecipients(EmailRecipientSelection selection, HashSet<string> recipients)
+        {
+            if (selection.Requester && !string.IsNullOrWhiteSpace(userConfig.User.Email))
+            {
+                AddAddresses(recipients, new List<string> { userConfig.User.Email });
             }
         }
 

@@ -382,6 +382,31 @@ namespace FWO.Test
         }
 
         [Test]
+        public void DisplayRecipient_ReturnsLocalizedLabelForSimpleRecipients()
+        {
+            SimulatedUserConfig userConfig = new();
+            EditNotifications component = new();
+            SetInjectedUserConfig(component, userConfig);
+
+            string displayedRecipient = (string)GetPrivateMethod("DisplayRecipient").Invoke(component,
+                new object?[] { EmailRecipientOption.Requester, null })!;
+
+            Assert.That(displayedRecipient, Is.EqualTo(userConfig.GetText(nameof(EmailRecipientOption.Requester))));
+        }
+
+        [Test]
+        public void DisplayOtherAddresses_ReturnsLocalizedLabelWhenEmpty()
+        {
+            SimulatedUserConfig userConfig = new();
+            EditNotifications component = new();
+            SetInjectedUserConfig(component, userConfig);
+
+            string displayedRecipient = (string)GetPrivateMethod("DisplayOtherAddresses").Invoke(component, new object?[] { "" })!;
+
+            Assert.That(displayedRecipient, Is.EqualTo(userConfig.GetText(nameof(EmailRecipientOption.OtherAddresses))));
+        }
+
+        [Test]
         public void EditNotification_MigratesLegacyMainResponsibleToConfiguredSelection()
         {
             EditNotifications component = new();
@@ -422,6 +447,27 @@ namespace FWO.Test
         }
 
         [Test]
+        public void SyncAddresses_ClearsRequesterSelectionWhenRequesterOptionIsNotAvailable()
+        {
+            EditNotifications component = new();
+            SetClient(component, NotificationClient.RuleTimer);
+            FwoNotification notification = new();
+
+            SetPrivateField(component, "actNotification", notification);
+            SetPrivateField(component, "ToRecipientSelection", new EmailRecipientSelection
+            {
+                None = false,
+                Requester = true
+            });
+
+            GetPrivateMethod("SyncAddresses").Invoke(component, null);
+
+            EmailRecipientSelection selection = GetPrivateField<EmailRecipientSelection>(component, "ToRecipientSelection");
+            Assert.That(selection.Requester, Is.False);
+            Assert.That(notification.RecipientTo, Is.EqualTo(EmailRecipientOption.None));
+        }
+
+        [Test]
         public void CheckConsistency_ReturnsTrue_ForConfiguredResponsibleNotification()
         {
             EnsureNotificationTranslations();
@@ -445,6 +491,29 @@ namespace FWO.Test
             bool isConsistent = (bool)GetPrivateMethod("CheckConsistency").Invoke(component, null)!;
 
             Assert.That(isConsistent, Is.True);
+        }
+
+        [Test]
+        public void CheckConsistency_ReturnsFalse_WhenDeadlineRepeatsWithoutCount()
+        {
+            EnsureNotificationTranslations();
+            EditNotifications component = new();
+            SetClient(component, NotificationClient.RuleTimer);
+            SetInjectedUserConfig(component, new SimulatedUserConfig());
+            SetPrivateField(component, "actNotification", new FwoNotification
+            {
+                Channel = NotificationChannel.Email,
+                EmailSubject = "Subject",
+                RecipientTo = EmailRecipientOption.OtherAddresses,
+                EmailAddressTo = "to@example.org",
+                Deadline = NotificationDeadline.RuleExpiry,
+                RepeatOffsetAfterDeadline = 2,
+                RepeatIntervalAfterDeadline = SchedulerInterval.Weeks
+            });
+
+            bool isConsistent = (bool)GetPrivateMethod("CheckConsistency").Invoke(component, null)!;
+
+            Assert.That(isConsistent, Is.False);
         }
 
         [Test]

@@ -26,10 +26,6 @@ namespace FWO.Test
         {
             DecommissionTestApiConn apiConnection = new();
             SimulatedUserConfig userConfig = new();
-            userConfig.ModDecommEmailReceiver = nameof(EmailRecipientOption.OwnerMainResponsible);
-            userConfig.ModDecommEmailOtherAddresses = "extra1@example.test;extra2@example.test";
-            userConfig.ModDecommEmailSubject = $"Subject {Placeholder.INTERFACE_NAME}";
-            userConfig.ModDecommEmailBody = $"Body {Placeholder.INTERFACE_NAME} {Placeholder.NEW_INTERFACE_NAME} {Placeholder.NEW_INTERFACE_LINK} {Placeholder.REASON} {Placeholder.USER_NAME}";
             userConfig.UiHostName = "https://ui.example.test";
             userConfig.User.Name = "Tester";
 
@@ -50,17 +46,28 @@ namespace FWO.Test
                 App = new FwoOwner { Id = 4, Name = "Owner4", ExtAppId = "APP4" }
             };
 
+            FwoNotification notification = new()
+            {
+                NotificationClient = NotificationClient.AppDecomm,
+                Deadline = NotificationDeadline.None,
+                Layout = NotificationLayout.HtmlInBody,
+                RecipientTo = EmailRecipientOption.OwnerMainResponsible,
+                EmailSubject = $"Subject {Placeholder.INTERFACE_NAME}",
+                EmailBody = $"Body {Placeholder.INTERFACE_NAME} {Placeholder.NEW_INTERFACE_NAME} {Placeholder.NEW_INTERFACE_LINK} {Placeholder.REASON} {Placeholder.USER_NAME}"
+            };
+            apiConnection.Notifications = new List<FwoNotification> { notification };
+
             TestEmailHelper emailHelper = new(userConfig);
-            List<ModellingConnection> interfaceUsers =
-            [
+            List<ModellingConnection> interfaceUsers = new()
+            {
                 new ModellingConnection { Id = 20, AppId = 2, App = new FwoOwner { Id = 2, Name = "Owner2" }, Name = "Conn2" },
                 new ModellingConnection { Id = 21, AppId = 3, App = new FwoOwner { Id = 3, Name = "Owner3" }, Name = "Conn3" },
                 new ModellingConnection { Id = 22, AppId = 1, App = owner, Name = "ConnOwn" }
-            ];
+            };
             apiConnection.InterfaceUsers = interfaceUsers;
             apiConnection.ConnectionById = interfaceConn;
 
-            DecommissionTestHandler handler = new(apiConnection, userConfig, owner, [interfaceConn], interfaceConn, addMode: false,
+            DecommissionTestHandler handler = new(apiConnection, userConfig, owner, new List<ModellingConnection> { interfaceConn }, interfaceConn, addMode: false,
                 readOnly: false, DefaultInit.DoNothing, DefaultInit.DoNothing, isOwner: true)
             {
                 UsingConnections = interfaceUsers,
@@ -76,16 +83,15 @@ namespace FWO.Test
             ClassicAssert.AreEqual(2, emailHelper.SentEmails.Count);
             ClassicAssert.IsTrue(emailHelper.SentEmails.All(email => email.Owner.Id != owner.Id));
             ClassicAssert.IsTrue(emailHelper.SentEmails.All(email => email.Subject == $"Subject {interfaceConn.Name}"));
-            ClassicAssert.IsTrue(emailHelper.SentEmails.All(email => email.Body.Contains($"<b>{interfaceConn.Name}</b>")));
-            ClassicAssert.IsTrue(emailHelper.SentEmails.All(email => email.Body.Contains($"<b>{proposedInterface.Name}</b>")));
-            ClassicAssert.IsTrue(emailHelper.SentEmails.All(email => email.Body.Contains($"<b>{userConfig.User.Name}</b>")));
-            ClassicAssert.IsTrue(emailHelper.SentEmails.All(email => email.Body.Contains($"<b>Planned</b>")));
+            ClassicAssert.IsTrue(emailHelper.SentEmails.All(email => email.Body.Contains(interfaceConn.Name)));
+            ClassicAssert.IsTrue(emailHelper.SentEmails.All(email => email.Body.Contains(proposedInterface.Name)));
+            ClassicAssert.IsTrue(emailHelper.SentEmails.All(email => email.Body.Contains(userConfig.User.Name)));
+            ClassicAssert.IsTrue(emailHelper.SentEmails.All(email => email.Body.Contains("Planned")));
+            ClassicAssert.IsTrue(emailHelper.SentEmails.All(email => email.Body.Contains($"<a target=\"_blank\" href=\"{userConfig.UiHostName}/{PageName.Modelling}/{proposedInterface.App.ExtAppId}/{proposedInterface.Id}\">")));
             ClassicAssert.IsTrue(emailHelper.SentEmails.All(email => email.Body.Contains($"{userConfig.UiHostName}/{PageName.Modelling}/{proposedInterface.App.ExtAppId}/{proposedInterface.Id}")));
-            ClassicAssert.IsTrue(emailHelper.OtherAddressCalls.All(addresses =>
-                addresses.SequenceEqual(new[] { "extra1@example.test", "extra2@example.test" })));
 
-            CollectionAssert.AreEquivalent(new[] { 2, 3 }, apiConnection.AddedPermittedOwnerAppIds);
-            CollectionAssert.AreEquivalent(new[] { 2, 3 }, apiConnection.AddedSelectedConnectionAppIds);
+            CollectionAssert.AreEquivalent(new List<int> { 2, 3 }, apiConnection.AddedPermittedOwnerAppIds);
+            CollectionAssert.AreEquivalent(new List<int> { 2, 3 }, apiConnection.AddedSelectedConnectionAppIds);
             ClassicAssert.IsTrue(apiConnection.AddedSelectedConnections.All(c => c.ConnectionId == proposedInterface.Id));
             ClassicAssert.IsTrue(apiConnection.RemovedSelectedConnections.Contains(interfaceConn.Id));
         }
@@ -110,8 +116,7 @@ namespace FWO.Test
         private sealed class TestEmailHelper : EmailHelper
         {
             public bool InitCalled { get; private set; }
-            public List<(FwoOwner Owner, string Subject, string Body, EmailRecipientOption Recipient)> SentEmails { get; } = [];
-            public List<List<string>> OtherAddressCalls { get; } = [];
+            public List<(FwoOwner Owner, string Subject, string Body, FwoNotification Notification)> SentEmails { get; } = new();
 
             public TestEmailHelper(UserConfig userConfig)
                 : base(new SimulatedApiConnection(), null, userConfig, DefaultInit.DoNothing)
@@ -125,30 +130,22 @@ namespace FWO.Test
                 return Task.CompletedTask;
             }
 
-            public override Task<bool> SendEmailToOwnerResponsibles(FwoOwner owner, string subject, string body, EmailRecipientOption recOpt, bool reqInCc = false)
+            public override Task<bool> SendEmailToNotificationRecipients(FwoNotification notification, FwoOwner? owner, string subject, string body)
             {
-                SentEmails.Add((owner, subject, body, recOpt));
-                return Task.FromResult(true);
-            }
-
-            public override Task<bool> SendEmailToOwnerResponsibles(FwoOwner owner, string subject, string body, string recipientConfig, bool reqInCc = false, List<string>? otherAddresses = null)
-            {
-                EmailRecipientSelection parsedSelection = EmailRecipientSelection.Parse(recipientConfig);
-                EmailRecipientOption recipient = parsedSelection.None ? EmailRecipientOption.None : EmailRecipientOption.OwnerMainResponsible;
-                SentEmails.Add((owner, subject, body, recipient));
-                OtherAddressCalls.Add(otherAddresses ?? []);
+                SentEmails.Add((owner ?? new FwoOwner(), subject, body, notification));
                 return Task.FromResult(true);
             }
         }
 
         private sealed class DecommissionTestApiConn : SimulatedApiConnection
         {
-            public List<int> AddedPermittedOwnerAppIds { get; } = [];
-            public List<int> AddedSelectedConnectionAppIds { get; } = [];
-            public List<(int AppId, int ConnectionId)> AddedSelectedConnections { get; } = [];
-            public List<int> RemovedSelectedConnections { get; } = [];
-            public List<ModellingConnection> InterfaceUsers { get; set; } = [];
-            public List<FwoOwner> PermittedOwners { get; set; } = [];
+            public List<int> AddedPermittedOwnerAppIds { get; } = new();
+            public List<int> AddedSelectedConnectionAppIds { get; } = new();
+            public List<(int AppId, int ConnectionId)> AddedSelectedConnections { get; } = new();
+            public List<int> RemovedSelectedConnections { get; } = new();
+            public List<ModellingConnection> InterfaceUsers { get; set; } = new();
+            public List<FwoOwner> PermittedOwners { get; set; } = new();
+            public List<FwoNotification> Notifications { get; set; } = new();
             public ModellingConnection? ConnectionById { get; set; }
 
             public override Task<QueryResponseType> SendQueryAsync<QueryResponseType>(string query, object? variables = null, string? operationName = null, FWO.Api.Client.QueryChunkingOptions? chunkingOptions = null)
@@ -165,7 +162,7 @@ namespace FWO.Test
                     int connId = GetIntVariable(variables, "connectionId");
                     AddedSelectedConnectionAppIds.Add(appId);
                     AddedSelectedConnections.Add((appId, connId));
-                    ReturnIdWrapper wrapper = new() { ReturnIds = [new ReturnId { InsertedId = connId }] };
+                    ReturnIdWrapper wrapper = new() { ReturnIds = new ReturnId[] { new ReturnId { InsertedId = connId } } };
                     return Task.FromResult((QueryResponseType)(object)wrapper);
                 }
                 if (query == ModellingQueries.removeSelectedConnection)
@@ -178,9 +175,13 @@ namespace FWO.Test
                 {
                     return Task.FromResult((QueryResponseType)(object)new ReturnId { AffectedRows = 1 });
                 }
+                if (typeof(QueryResponseType) == typeof(List<FwoNotification>) && query == NotificationQueries.getNotifications)
+                {
+                    return Task.FromResult((QueryResponseType)(object)Notifications);
+                }
                 if (query == ModellingQueries.addHistoryEntry)
                 {
-                    ReturnIdWrapper wrapper = new() { ReturnIds = [new ReturnId { AffectedRows = 1 }] };
+                    ReturnIdWrapper wrapper = new() { ReturnIds = new ReturnId[] { new ReturnId { AffectedRows = 1 } } };
                     return Task.FromResult((QueryResponseType)(object)wrapper);
                 }
                 if (responseType == typeof(List<ModellingConnectionWrapper>) && query == ModellingQueries.getSelectedConnections)

@@ -91,11 +91,13 @@ namespace FWO.Services.Modelling
             await Save(true, true);
             await RemoveFromAllSelections();
 
-            List<FwoOwner> appsToNotify = [];
-            if (!string.IsNullOrWhiteSpace(userConfig.ModDecommEmailReceiver)
-                && !userConfig.ModDecommEmailReceiver.Equals(nameof(EmailRecipientOption.None), StringComparison.Ordinal))
+            List<FwoOwner> appsToNotify = UsingConnections
+                .Where(c => c.AppId != null && c.AppId != ActConn.AppId)
+                .Select(c => c.App)
+                .Distinct()
+                .ToList();
+            if (appsToNotify.Count > 0)
             {
-                appsToNotify = UsingConnections.Where(c => c.AppId != null && c.AppId != ActConn.AppId).Select(c => c.App).Distinct().ToList();
                 await NotifyUsers(appsToNotify, reason, proposedInterface, middlewareClient);
             }
 
@@ -109,23 +111,25 @@ namespace FWO.Services.Modelling
             {
                 EmailHelper emailHelper = CreateEmailHelper(middlewareClient);
                 await emailHelper.Init();
-
-                string subject = userConfig.ModDecommEmailSubject.Replace(Placeholder.INTERFACE_NAME, ActConn.Name);
+                List<FwoNotification> decommissionNotifications = await LoadImmediateDecommissionNotifications();
+                if (decommissionNotifications.Count == 0)
+                {
+                    Log.WriteWarning("Modelling Interface Decommission", "No immediate app decommission notifications configured. Skipping email send.");
+                    return;
+                }
 
                 int successCount = 0;
                 int failCount = 0;
-                List<string> legacyOtherAddresses = EmailHelper.SplitAddresses(userConfig.ModDecommEmailOtherAddresses);
                 foreach (var app in appsToNotify)
                 {
-                    if (await emailHelper.SendEmailToOwnerResponsibles(app, subject, ConstructBody(app, reason, proposedInterface),
-                        userConfig.ModDecommEmailReceiver, false, legacyOtherAddresses))
-                    {
-                        successCount++;
-                    }
-                    else
-                    {
-                        failCount++;
-                    }
+                    (int appSuccessCount, int appFailCount) = await SendDecommissionNotificationsForApp(
+                        emailHelper,
+                        decommissionNotifications,
+                        app,
+                        reason,
+                        proposedInterface);
+                    successCount += appSuccessCount;
+                    failCount += appFailCount;
                 }
                 if (successCount > 0)
                 {
@@ -144,23 +148,93 @@ namespace FWO.Services.Modelling
             }
         }
 
+        private async Task<List<FwoNotification>> LoadImmediateDecommissionNotifications()
+        {
+            List<FwoNotification> notifications = await apiConnection.SendQueryAsync<List<FwoNotification>>(NotificationQueries.getNotifications,
+                new { client = NotificationClient.AppDecomm.ToString() });
+            return notifications.Where(notification => notification.Deadline == NotificationDeadline.None).ToList();
+        }
+
+        private async Task<(int successCount, int failCount)> SendDecommissionNotificationsForApp(
+            EmailHelper emailHelper,
+            List<FwoNotification> decommissionNotifications,
+            FwoOwner app,
+            string reason,
+            ModellingConnection? proposedInterface)
+        {
+            int successCount = 0;
+            int failCount = 0;
+            foreach (FwoNotification notification in decommissionNotifications.Where(notification => notification.OwnerId == null || notification.OwnerId == app.Id))
+            {
+                string subject = RenderDecommissionPlaceholders(notification.EmailSubject, app, reason, proposedInterface);
+                string body = RenderDecommissionBody(notification, app, reason, proposedInterface);
+                if (await emailHelper.SendEmailToNotificationRecipients(notification, app, subject, body))
+                {
+                    successCount++;
+                }
+                else
+                {
+                    failCount++;
+                }
+            }
+
+            return (successCount, failCount);
+        }
+
         protected virtual EmailHelper CreateEmailHelper(MiddlewareClient middlewareClient)
         {
             return new EmailHelper(apiConnection, middlewareClient, userConfig, DisplayMessageInUi);
         }
 
-        private string ConstructBody(FwoOwner app, string reason, ModellingConnection? proposedInterface)
+        private string RenderDecommissionPlaceholders(string text, FwoOwner app, string reason, ModellingConnection? proposedInterface)
         {
-            string interfaceUrl = $"{userConfig.UiHostName}/{PageName.Modelling}/{proposedInterface?.App.ExtAppId}/{proposedInterface?.Id}";
-            string interfacelink = $"<a target=\"_blank\" href=\"{interfaceUrl}\">{userConfig.GetText("interface")}: {proposedInterface?.Name}</a><br>";
-            string body = userConfig.ModDecommEmailBody
-                .Replace(Placeholder.INTERFACE_NAME, $"<b>{ActConn.Name}</b>")
-                .Replace(Placeholder.NEW_INTERFACE_NAME, $"<b>{proposedInterface?.Name}</b>")
-                .Replace(Placeholder.NEW_INTERFACE_LINK, $"<b>{interfacelink}</b>")
-                .Replace(Placeholder.REASON, $"<b>{reason}</b>")
-                .Replace(Placeholder.USER_NAME, $"<b>{userConfig.User.Name}</b>");
-            string connList = string.Join("<br>", UsingConnections.Where(c => c.AppId != null && c.AppId == app.Id).Select(a => a.Name));
-            return $"{body}<br><b>{connList}</b>";
+            NotificationPlaceholderResolver.NotificationPlaceholderValues placeholderValues = CreateDecommissionPlaceholderValues(app, reason, proposedInterface);
+            return NotificationPlaceholderResolver.ReplaceNotificationPlaceholders(text ?? "", placeholderValues, renderHtmlLinks: false);
+        }
+
+        private string RenderDecommissionBody(FwoNotification notification, FwoOwner app, string reason, ModellingConnection? proposedInterface)
+        {
+            string body = RenderDecommissionBodyPlaceholders(notification.EmailBody, app, reason, proposedInterface);
+            string connList = string.Join(notification.Layout == NotificationLayout.HtmlInBody ? "<br>" : Environment.NewLine,
+                UsingConnections.Where(c => c.AppId != null && c.AppId == app.Id).Select(a => a.Name));
+            if (string.IsNullOrWhiteSpace(connList))
+            {
+                return body;
+            }
+
+            return notification.Layout == NotificationLayout.HtmlInBody
+                ? $"{body}<br><b>{connList}</b>"
+                : $"{body}{Environment.NewLine}{connList}";
+        }
+
+        private string RenderDecommissionBodyPlaceholders(string text, FwoOwner app, string reason, ModellingConnection? proposedInterface)
+        {
+            NotificationPlaceholderResolver.NotificationPlaceholderValues placeholderValues = CreateDecommissionPlaceholderValues(app, reason, proposedInterface);
+            return NotificationPlaceholderResolver.ReplaceNotificationPlaceholders(text ?? "", placeholderValues, renderHtmlLinks: true);
+        }
+
+        private NotificationPlaceholderResolver.NotificationPlaceholderValues CreateDecommissionPlaceholderValues(
+            FwoOwner app,
+            string reason,
+            ModellingConnection? proposedInterface)
+        {
+            string proposedInterfaceUrl = proposedInterface == null
+                ? ""
+                : $"{userConfig.UiHostName}/{PageName.Modelling}/{proposedInterface.App.ExtAppId}/{proposedInterface.Id}";
+            return new NotificationPlaceholderResolver.NotificationPlaceholderValues
+            {
+                Application = app,
+                InterfaceName = ActConn.Name ?? "",
+                NewInterfaceName = proposedInterface?.Name ?? "",
+                InterfaceLinkText = userConfig.GetText("interface"),
+                InterfaceLinkName = proposedInterface?.Name ?? "",
+                InterfaceLinkUrl = proposedInterfaceUrl,
+                NewInterfaceLinkText = userConfig.GetText("interface"),
+                NewInterfaceLinkName = proposedInterface?.Name ?? "",
+                NewInterfaceLinkUrl = proposedInterfaceUrl,
+                Reason = reason,
+                UserName = userConfig.User.Name
+            };
         }
 
         private async Task AddToSelections(bool proposeAlternative, ModellingConnection? proposedInterface, List<FwoOwner> appsToNotify)

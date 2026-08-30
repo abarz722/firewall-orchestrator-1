@@ -10,6 +10,28 @@ namespace FWO.Services
     public static class NotificationPlaceholderResolver
     {
         /// <summary>
+        /// Carries the values required to resolve notification placeholders.
+        /// Callers populate the data they have; the resolver decides how to render it.
+        /// </summary>
+        public sealed record NotificationPlaceholderValues
+        {
+            public FwoOwner Application { get; init; } = new();
+            public FwoOwner? RequestingOwner { get; init; }
+            public string InterfaceName { get; init; } = "";
+            public string InterfaceLinkText { get; init; } = "";
+            public string InterfaceLinkName { get; init; } = "";
+            public string InterfaceLinkUrl { get; init; } = "";
+            public string NewInterfaceName { get; init; } = "";
+            public string NewInterfaceLinkText { get; init; } = "";
+            public string NewInterfaceLinkName { get; init; } = "";
+            public string NewInterfaceLinkUrl { get; init; } = "";
+            public string Reason { get; init; } = "";
+            public string UserName { get; init; } = "";
+            public string RequesterName { get; init; } = "";
+            public string RequestDate { get; init; } = "";
+        }
+
+        /// <summary>
         /// Replaces owner and time interval placeholders.
         /// </summary>
         public static string ReplaceOwnerPlaceholders(string text, FwoOwner? owner, string timeIntervalText = "")
@@ -27,6 +49,26 @@ namespace FWO.Services
         {
             return ReplaceOwnerPlaceholders(text, owner ?? GetWorkflowOwner(statefulObject))
                 .Replace(Placeholder.REQUESTER, GetRequesterName(statefulObject));
+        }
+
+        /// <summary>
+        /// Replaces notification placeholders.
+        /// </summary>
+        public static string ReplaceNotificationPlaceholders(string text, NotificationPlaceholderValues values, bool renderHtmlLinks = false)
+        {
+            return text
+                .Replace(Placeholder.APPNAME, values.Application.Name ?? "")
+                .Replace(Placeholder.APPID, values.Application.ExtAppId ?? "")
+                .Replace(Placeholder.REQUESTING_APPNAME, values.RequestingOwner?.Name ?? "")
+                .Replace(Placeholder.REQUESTING_APPID, values.RequestingOwner?.ExtAppId ?? "")
+                .Replace(Placeholder.REQUESTER, FirstNonEmpty(values.RequesterName, values.RequestingOwner?.Name))
+                .Replace(Placeholder.REQUESTDATE, values.RequestDate)
+                .Replace(Placeholder.INTERFACE_NAME, values.InterfaceName)
+                .Replace(Placeholder.INTERFACE_LINK, RenderLink(values.InterfaceLinkUrl, values.InterfaceLinkText, values.InterfaceLinkName, renderHtmlLinks))
+                .Replace(Placeholder.NEW_INTERFACE_NAME, values.NewInterfaceName)
+                .Replace(Placeholder.NEW_INTERFACE_LINK, RenderLink(values.NewInterfaceLinkUrl, values.NewInterfaceLinkText, values.NewInterfaceLinkName, renderHtmlLinks))
+                .Replace(Placeholder.REASON, values.Reason)
+                .Replace(Placeholder.USER_NAME, values.UserName);
         }
 
         private static FwoOwner? GetWorkflowOwner(WfStatefulObject statefulObject)
@@ -51,6 +93,32 @@ namespace FWO.Services
         private static string FirstNonEmpty(params string?[] values)
         {
             return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? "";
+        }
+
+        private static string RenderLink(string url, string text, string linkName, bool renderHtmlLinks)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                return "";
+            }
+
+            if (!renderHtmlLinks)
+            {
+                return url;
+            }
+
+            string displayText = string.IsNullOrWhiteSpace(text) ? linkName : text;
+            if (string.IsNullOrWhiteSpace(displayText))
+            {
+                return url;
+            }
+
+            if (string.IsNullOrWhiteSpace(linkName))
+            {
+                return $"<a target=\"_blank\" href=\"{url}\">{displayText}</a>";
+            }
+
+            return $"<a target=\"_blank\" href=\"{url}\">{displayText}: {linkName}</a>";
         }
     }
 }

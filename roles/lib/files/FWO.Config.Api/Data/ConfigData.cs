@@ -409,21 +409,26 @@ namespace FWO.Config.Api.Data
         [JsonProperty("flowNamingSourceManagementRanking"), JsonPropertyName("flowNamingSourceManagementRanking")]
         public string FlowNamingSourceManagementRanking { get; set; } = "[]";
 
+        [Obsolete("Use notification entries with NotificationClient.InterfaceRequest instead.")]
         [JsonProperty("modReqEmailReceiver"), JsonPropertyName("modReqEmailReceiver")]
         public string ModReqEmailReceiver { get; set; } = nameof(EmailRecipientOption.None);
 
+        [Obsolete("Use notification recipient selection for NotificationClient.InterfaceRequest instead.")]
         [JsonProperty("modReqEmailRequesterInCc"), JsonPropertyName("modReqEmailRequesterInCc")]
         public bool ModReqEmailRequesterInCc { get; set; } = true;
 
         [JsonProperty("modReqEmailOtherAddresses"), JsonPropertyName("modReqEmailOtherAddresses")]
         public string ModReqEmailOtherAddresses { get; set; } = "";
 
+        [Obsolete("Use notification entries with NotificationClient.InterfaceRequest instead.")]
         [JsonProperty("modReqEmailSubject"), JsonPropertyName("modReqEmailSubject")]
         public string ModReqEmailSubject { get; set; } = "";
 
+        [Obsolete("Use notification entries with NotificationClient.InterfaceRequest instead.")]
         [JsonProperty("modReqEmailBody"), JsonPropertyName("modReqEmailBody")]
         public string ModReqEmailBody { get; set; } = "";
 
+        [Obsolete("Use notification entries with NotificationClient.InterfaceRequest instead.")]
         [JsonProperty("modUnansweredReqEmailBody"), JsonPropertyName("modUnansweredReqEmailBody")]
         public string ModUnansweredReqEmailBody { get; set; } = "";
 
@@ -442,15 +447,19 @@ namespace FWO.Config.Api.Data
         [JsonProperty("modReqTaskTitle"), JsonPropertyName("modReqTaskTitle")]
         public string ModReqTaskTitle { get; set; } = "";
 
+        [Obsolete("Use notification entries with NotificationClient.AppDecomm instead.")]
         [JsonProperty("modDecommEmailReceiver"), JsonPropertyName("modDecommEmailReceiver")]
         public string ModDecommEmailReceiver { get; set; } = nameof(EmailRecipientOption.None);
 
+        [Obsolete("Use notification entries with NotificationClient.AppDecomm instead.")]
         [JsonProperty("modDecommEmailOtherAddresses"), JsonPropertyName("modDecommEmailOtherAddresses")]
         public string ModDecommEmailOtherAddresses { get; set; } = "";
 
+        [Obsolete("Use notification entries with NotificationClient.AppDecomm instead.")]
         [JsonProperty("modDecommEmailSubject"), JsonPropertyName("modDecommEmailSubject")]
         public string ModDecommEmailSubject { get; set; } = "";
 
+        [Obsolete("Use notification entries with NotificationClient.AppDecomm instead.")]
         [JsonProperty("modDecommEmailBody"), JsonPropertyName("modDecommEmailBody")]
         public string ModDecommEmailBody { get; set; } = "";
 

@@ -274,7 +274,7 @@ namespace FWO.Middleware.Server.Jobs
                         continue;
                     }
 
-                    int sentForTicket = await notificationService.SendNotification(notification, owner, await PrepareBody(ticket, owner));
+                    int sentForTicket = await notificationService.SendNotification(notification, owner, await PrepareBody(notification, ticket, owner));
                     emailsSent += sentForTicket;
                     if (sentForTicket == 0)
                     {
@@ -320,19 +320,29 @@ namespace FWO.Middleware.Server.Jobs
             };
         }
 
-        private async Task<string> PrepareBody(WfTicket ticket, FwoOwner owner)
+        private async Task<string> PrepareBody(FwoNotification notification, WfTicket ticket, FwoOwner owner)
         {
             WfReqTask? reqTask = ticket.Tasks.FirstOrDefault(r => r.TaskType == WfTaskType.new_interface.ToString());
             FwoOwner? requestingOwner = await GetRequestingOwner(reqTask?.GetAddInfoIntValue(AdditionalInfoKeys.ReqOwner));
-
-            return globalConfig.ModUnansweredReqEmailBody
-                .Replace(Placeholder.REQUESTER, ticket.Requester?.Name)
-                .Replace(Placeholder.REQUESTDATE, ticket.CreationDate.ToString("dd.MM.yyyy"))
-                .Replace(Placeholder.REQUESTING_APPNAME, requestingOwner?.Name)
-                .Replace(Placeholder.REQUESTING_APPID, requestingOwner?.ExtAppId)
-                .Replace(Placeholder.APPNAME, owner.Name)
-                .Replace(Placeholder.APPID, owner.ExtAppId)
-                .Replace(Placeholder.INTERFACE_LINK, ConstructLink(owner, reqTask));
+            FwoOwner effectiveRequestingOwner = requestingOwner ?? new FwoOwner();
+            string interfaceName = reqTask?.Title ?? globalConfig.GetText("interface");
+            string interfaceUrl = ConstructLink(owner, reqTask);
+            NotificationPlaceholderResolver.NotificationPlaceholderValues requestPlaceholderValues = new()
+            {
+                Application = owner,
+                RequestingOwner = effectiveRequestingOwner,
+                InterfaceName = interfaceName,
+                InterfaceLinkText = globalConfig.GetText("request_interface"),
+                InterfaceLinkUrl = interfaceUrl,
+                NewInterfaceName = interfaceName,
+                NewInterfaceLinkText = globalConfig.GetText("request_interface"),
+                NewInterfaceLinkUrl = interfaceUrl,
+                Reason = "",
+                UserName = ticket.Requester?.Name ?? "",
+                RequesterName = ticket.Requester?.Name ?? ticket.RequesterDn ?? "",
+                RequestDate = ticket.CreationDate.ToString("dd.MM.yyyy")
+            };
+            return NotificationPlaceholderResolver.ReplaceNotificationPlaceholders(notification.EmailBody, requestPlaceholderValues, renderHtmlLinks: true);
         }
 
         private async Task<FwoOwner?> GetRequestingOwner(int? ownerId)
@@ -355,8 +365,7 @@ namespace FWO.Middleware.Server.Jobs
         private string ConstructLink(FwoOwner owner, WfReqTask? reqTask)
         {
             int? connId = reqTask?.GetAddInfoIntValue(AdditionalInfoKeys.ConnId);
-            string interfaceUrl = $"{globalConfig.UiHostName}/{PageName.Modelling}/{owner.ExtAppId}/{connId}";
-            return $"<a target=\"_blank\" href=\"{interfaceUrl}\">{reqTask?.Title ?? globalConfig.GetText("interface")}</a>";
+            return $"{globalConfig.UiHostName}/{PageName.Modelling}/{owner.ExtAppId}/{connId}";
         }
     }
 }

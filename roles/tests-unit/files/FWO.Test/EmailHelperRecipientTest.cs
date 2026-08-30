@@ -74,6 +74,180 @@ namespace FWO.Test
         }
 
         [Test]
+        public async Task SendEmailToNotificationRecipients_UsesNotificationRecipientsAndLayout()
+        {
+            SimulatedUserConfig userConfig = new()
+            {
+                UseDummyEmailAddress = false
+            };
+            CapturingEmailHelper helper = new(userConfig);
+            SetPrivateField(helper, "uiUsers", new List<UiUser>
+            {
+                new() { Dn = "cn=main,dc=test", Email = "main@example.test" },
+                new() { Dn = "cn=cc,dc=test", Email = "cc@example.test" },
+                new() { Dn = "cn=bcc,dc=test", Email = "bcc@example.test" }
+            });
+
+            FwoOwner owner = new()
+            {
+                Name = "Selected",
+                ExtAppId = "APP-1"
+            };
+            owner.AddOwnerResponsible(GlobalConst.kOwnerResponsibleTypeMain, "cn=main,dc=test");
+            FwoNotification notification = new()
+            {
+                Layout = NotificationLayout.HtmlInBody,
+                RecipientTo = EmailRecipientOption.OwnerMainResponsible,
+                RecipientCc = EmailRecipientOption.OtherAddresses,
+                EmailAddressCc = "cc@example.test",
+                RecipientBcc = EmailRecipientOption.OtherAddresses,
+                EmailAddressBcc = "bcc@example.test",
+                EmailSubject = "Subject",
+                EmailBody = "Body"
+            };
+
+            bool sent = await helper.SendEmailToNotificationRecipients(notification, owner, "Rendered subject", "Rendered body");
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(sent, Is.True);
+                Assert.That(helper.CapturedTo, Is.EqualTo(new List<string> { "main@example.test" }));
+                Assert.That(helper.CapturedCc, Is.EqualTo(new List<string> { "cc@example.test" }));
+                Assert.That(helper.CapturedBcc, Is.EqualTo(new List<string> { "bcc@example.test" }));
+                Assert.That(helper.CapturedSubject, Is.EqualTo("Rendered subject"));
+                Assert.That(helper.CapturedBody, Is.EqualTo("Rendered body"));
+                Assert.That(helper.CapturedMailFormatHtml, Is.True);
+            });
+        }
+
+        [Test]
+        public async Task SendEmailToNotificationRecipients_ResolvesRequesterCcFromNotificationSelection()
+        {
+            SimulatedUserConfig userConfig = new()
+            {
+                UseDummyEmailAddress = false
+            };
+            userConfig.User.Email = "requester@example.test";
+            CapturingEmailHelper helper = new(userConfig);
+            SetPrivateField(helper, "uiUsers", new List<UiUser>
+            {
+                new() { Dn = "cn=main,dc=test", Email = "main@example.test" },
+                new() { Dn = "cn=cc,dc=test", Email = "cc@example.test" },
+            });
+
+            FwoOwner owner = new()
+            {
+                Name = "Selected",
+                ExtAppId = "APP-1"
+            };
+            owner.AddOwnerResponsible(GlobalConst.kOwnerResponsibleTypeMain, "cn=main,dc=test");
+            EmailRecipientSelection ccSelection = new()
+            {
+                Requester = true,
+                OtherAddresses = true,
+                OtherAddressList = new List<string> { "cc@example.test" }
+            };
+            FwoNotification notification = new()
+            {
+                RecipientTo = EmailRecipientOption.OwnerMainResponsible,
+                RecipientCc = EmailRecipientOption.ConfiguredResponsibles,
+                EmailAddressCc = ccSelection.ToConfigValue(),
+                EmailSubject = "Subject",
+                EmailBody = "Body"
+            };
+
+            bool sent = await helper.SendEmailToNotificationRecipients(notification, owner, "Rendered subject", "Rendered body");
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(sent, Is.True);
+                Assert.That(helper.CapturedCc, Is.EqualTo(new List<string> { "cc@example.test", "requester@example.test" }));
+            });
+        }
+
+        [Test]
+        public async Task SendWorkflowActionEmail_UsesWorkflowRecipientsAndPlaceholderObject()
+        {
+            SimulatedUserConfig userConfig = new()
+            {
+                UseDummyEmailAddress = false
+            };
+            CapturingEmailHelper helper = new(userConfig);
+            SetPrivateField(helper, "ownerGroups", new List<UserGroup>
+            {
+                new()
+                {
+                    Dn = "cn=workflow-group,dc=test",
+                    Users =
+                    [
+                        new UiUser { Dn = "cn=group-user,dc=test" }
+                    ]
+                }
+            });
+            SetPrivateField(helper, "uiUsers", new List<UiUser>
+            {
+                new() { Dn = "cn=requester,dc=test", Email = "requester@example.test" },
+                new() { Dn = "cn=group-user,dc=test", Email = "group@example.test" }
+            });
+            SetPrivateField(helper, "ScopedUserTo", "cn=requester,dc=test");
+            SetPrivateField(helper, "ScopedUserEmailTo", "requester@example.test");
+
+            FwoOwner owner = new()
+            {
+                Name = "Owner A",
+                ExtAppId = "APP-42"
+            };
+            WfTicket placeholderTicket = new()
+            {
+                Requester = new UiUser
+                {
+                    Name = "Requester A",
+                    Dn = "cn=requester,dc=test"
+                },
+                RequesterDn = "cn=requester,dc=test"
+            };
+            FwoNotification notification = new()
+            {
+                Layout = NotificationLayout.HtmlAsAttachment,
+                RecipientTo = EmailRecipientOption.Requester,
+                RecipientCc = EmailRecipientOption.AssignedGroup,
+                RecipientBcc = EmailRecipientOption.OtherAddresses,
+                EmailAddressBcc = "bcc@example.test",
+                EmailSubject = $"{Placeholder.REQUESTER}|{Placeholder.APPNAME}|{Placeholder.APPID}",
+                EmailBody = $"Body:{Placeholder.REQUESTER}|{Placeholder.APPNAME}|{Placeholder.APPID}"
+            };
+            WorkflowEmailContent workflowContent = new()
+            {
+                Html = "<p>Workflow content</p>",
+                PlainText = "Workflow content",
+                Json = "{}",
+                Csv = "workflow"
+            };
+
+            bool sent = await helper.SendWorkflowActionEmail(
+                notification,
+                new WfStatefulObject(),
+                owner,
+                "cn=workflow-group,dc=test",
+                workflowContent,
+                placeholderTicket);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(sent, Is.True);
+                Assert.That(helper.CapturedTo, Is.EqualTo(new List<string> { "requester@example.test" }));
+                Assert.That(helper.CapturedCc, Is.EqualTo(new List<string> { "group@example.test" }));
+                Assert.That(helper.CapturedBcc, Is.EqualTo(new List<string> { "bcc@example.test" }));
+                Assert.That(helper.CapturedSubject, Is.EqualTo("Requester A|Owner A|APP-42"));
+                Assert.That(helper.CapturedBody, Is.EqualTo("Body:Requester A|Owner A|APP-42"));
+                Assert.That(helper.CapturedMailFormatHtml, Is.False);
+                Assert.That(helper.CapturedAttachment, Is.Not.Null);
+                Assert.That(helper.CapturedAttachment!.ContentType, Is.EqualTo("application/html"));
+                Assert.That(helper.CapturedAttachment.FileName, Does.EndWith(".html"));
+            });
+        }
+
+        [Test]
         public async Task GetRecipientsReturnsDummyForOtherAddressesOption()
         {
             EmailHelper helper = CreateEmailHelper();
@@ -990,6 +1164,34 @@ namespace FWO.Test
                 }
 
                 throw new NotImplementedException($"Query not implemented in notification service test api: {query}");
+            }
+        }
+
+        private sealed class CapturingEmailHelper : EmailHelper
+        {
+            public List<string> CapturedTo { get; private set; } = [];
+            public List<string>? CapturedCc { get; private set; }
+            public List<string>? CapturedBcc { get; private set; }
+            public string CapturedSubject { get; private set; } = "";
+            public string CapturedBody { get; private set; } = "";
+            public bool CapturedMailFormatHtml { get; private set; }
+            public FormFile? CapturedAttachment { get; private set; }
+
+            public CapturingEmailHelper(UserConfig userConfig)
+                : base(new SimulatedApiConnection(), null, userConfig, DefaultInit.DoNothing)
+            {
+            }
+
+            protected override Task<bool> SendEmail(List<string> tos, string subject, string body, List<string>? ccs = null, List<string>? bccs = null, bool mailFormatHtml = true, Microsoft.AspNetCore.Http.FormFile? attachment = null)
+            {
+                CapturedTo = [.. tos];
+                CapturedCc = ccs == null ? null : [.. ccs];
+                CapturedBcc = bccs == null ? null : [.. bccs];
+                CapturedSubject = subject;
+                CapturedBody = body;
+                CapturedMailFormatHtml = mailFormatHtml;
+                CapturedAttachment = attachment;
+                return Task.FromResult(true);
             }
         }
 

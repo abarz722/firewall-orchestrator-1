@@ -1,7 +1,8 @@
-@using FWO.Middleware.Client
-
+@using FWO.Data
+@using FWO.Api.Client.Queries
 @using FWO.Compliance
-
+@using FWO.Middleware.Client
+@using FWO.Services
 @inject ApiConnection apiConnection
 @inject UserConfig userConfig
 @inject MiddlewareClient middlewareClient
@@ -150,19 +151,24 @@
     }
 
     private async Task SendEmail(long connId)
-    {       
+    {
         try
         {
-            EmailHelper emailHelper = new(apiConnection, middlewareClient, userConfig, DisplayMessageInUi);         
-
+            EmailHelper emailHelper = new(apiConnection, middlewareClient, userConfig, DisplayMessageInUi);
             await emailHelper.Init();
 
-            string interfaceUrl = $"{userConfig.UiHostName}/{PageName.Modelling}/{SelectedOwner.ExtAppId}/{connId}";
-            string subject = userConfig.ModReqEmailSubject;
-            string body = $"{RequestingOwner.Name} {userConfig.ModReqEmailBody} {SelectedOwner.Name} <br>" +
-                $"<a target=\"_blank\" href=\"{interfaceUrl}\">{userConfig.GetText("interface")}: {InterfaceName}</a><br>"; 
-            List<string> legacyOtherAddresses = EmailHelper.SplitAddresses(userConfig.ModReqEmailOtherAddresses);
-            if(await emailHelper.SendEmailToOwnerResponsibles(SelectedOwner, subject, body, userConfig.ModReqEmailReceiver, userConfig.ModReqEmailRequesterInCc, legacyOtherAddresses))
+            FwoNotification? notification = await LoadImmediateRequestNotification();
+            if (notification == null)
+            {
+                DisplayMessageInUi(null, userConfig.GetText("send_email"), userConfig.GetText("E9011"), true);
+                return;
+            }
+
+            NotificationPlaceholderResolver.NotificationPlaceholderValues requestPlaceholderValues = BuildRequestPlaceholderValues(connId);
+            string subject = BuildRequestEmailSubject(notification, requestPlaceholderValues);
+            string body = BuildRequestEmailBody(notification, requestPlaceholderValues);
+            bool sent = await emailHelper.SendEmailToNotificationRecipients(notification, SelectedOwner, subject, body);
+            if (sent)
             {
                 DisplayMessageInUi(null, userConfig.GetText("send_email"), userConfig.GetText("U9011"), false);
             }
@@ -175,6 +181,57 @@
         {
             DisplayMessageInUi(exception, userConfig.GetText("send_email"), "", true);
         }
+    }
+
+    private async Task<FwoNotification?> LoadImmediateRequestNotification()
+    {
+        List<FwoNotification> notifications;
+        try
+        {
+            notifications = await apiConnection.SendQueryAsync<List<FwoNotification>>(NotificationQueries.getNotifications,
+                new { client = NotificationClient.InterfaceRequest.ToString() });
+        }
+        catch
+        {
+            notifications = new List<FwoNotification>();
+        }
+
+        return notifications.FirstOrDefault(notification => notification.Deadline == NotificationDeadline.None);
+    }
+
+    private NotificationPlaceholderResolver.NotificationPlaceholderValues BuildRequestPlaceholderValues(long connId)
+    {
+        string interfaceUrl = $"{userConfig.UiHostName}/{PageName.Modelling}/{SelectedOwner.ExtAppId}/{connId}";
+        return new NotificationPlaceholderResolver.NotificationPlaceholderValues
+        {
+            Application = SelectedOwner,
+            RequestingOwner = RequestingOwner,
+            InterfaceName = InterfaceName,
+            InterfaceLinkText = userConfig.GetText("request_interface"),
+            InterfaceLinkName = InterfaceName,
+            InterfaceLinkUrl = interfaceUrl,
+            NewInterfaceName = InterfaceName,
+            NewInterfaceLinkText = userConfig.GetText("request_interface"),
+            NewInterfaceLinkName = InterfaceName,
+            NewInterfaceLinkUrl = interfaceUrl,
+            Reason = Reason,
+            UserName = userConfig.User.Name,
+            RequesterName = userConfig.User.Name,
+            RequestDate = DateTime.Now.ToString("dd.MM.yyyy")
+        };
+    }
+
+    private static string BuildRequestEmailSubject(FwoNotification notification, NotificationPlaceholderResolver.NotificationPlaceholderValues requestPlaceholderValues)
+    {
+        return NotificationPlaceholderResolver.ReplaceNotificationPlaceholders(notification.EmailSubject, requestPlaceholderValues);
+    }
+
+    private static string BuildRequestEmailBody(FwoNotification notification, NotificationPlaceholderResolver.NotificationPlaceholderValues requestPlaceholderValues)
+    {
+        return NotificationPlaceholderResolver.ReplaceNotificationPlaceholders(
+            NotificationEmailLayoutHelper.BuildBody(notification, (string?)null),
+            requestPlaceholderValues,
+            renderHtmlLinks: true);
     }
 
     private void Close()

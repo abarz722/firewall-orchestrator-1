@@ -28,6 +28,7 @@ namespace FWO.Test
         private static readonly string[] kJsonRecipients = ["json@example.test"];
         private static readonly string[] kMainRecipients = ["main@example.test"];
         private static readonly NotificationDeadline[] kNoneDeadline = [NotificationDeadline.None];
+        private static readonly NotificationDeadline[] kInterfaceRequestDeadlines = [NotificationDeadline.None, NotificationDeadline.RequestDate];
         private static readonly Type[] kCollectRecipientsParameterTypes = [typeof(FwoNotification), typeof(FwoOwner), typeof(bool), typeof(bool)];
 
         [Test]
@@ -780,6 +781,12 @@ namespace FWO.Test
         public void OfferedDeadlineOptions_ReturnsOnlyNone_ForWfAction()
         {
             CollectionAssert.AreEqual(kNoneDeadline, FwoNotification.OfferedDeadlineOptions(NotificationClient.WfAction));
+        }
+
+        [Test]
+        public void OfferedDeadlineOptions_ReturnsNoneAndRequestDate_ForInterfaceRequest()
+        {
+            CollectionAssert.AreEqual(kInterfaceRequestDeadlines, FwoNotification.OfferedDeadlineOptions(NotificationClient.InterfaceRequest));
         }
 
         [Test]
