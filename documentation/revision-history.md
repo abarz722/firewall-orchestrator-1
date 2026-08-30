@@ -634,3 +634,7 @@ Not supported any longer are:
 - Rule and connection reports filtered by destination port or protocol now also match the canonical ANY service, so these filters can return more rows than before the upgrade.
 - Cisco ASA: keep the legacy `ANY` UID for the imported "any ip protocol" service object while showing it as `any-ip` in reports; existing compliance criteria or queries pinned to the old `any-ip` UID need to be updated to use `ANY` instead.
 - OPNsense: a `tcp/udp` rule with no destination port now creates and references two separate service objects (`Any/tcp` and `Any/udp`) instead of one combined object.
+
+## 9.4.5 - 30.08.2026
+- rework modelling notifications and move interface-request notifications to centralized notification entries
+- interface-request notifications now support separate request and reminder bodies plus optional CC to the requester
