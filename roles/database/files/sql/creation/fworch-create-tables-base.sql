@@ -330,8 +330,20 @@ create table notification
 	bundle_type Varchar,
 	bundle_id Varchar,
 	recipient_bcc Varchar,
-	email_address_bcc Varchar
+	email_address_bcc Varchar,
+	logging Varchar NOT NULL DEFAULT 'send_only'
   );
+
+create table notification_log
+(
+    "timestamp" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    notification_id INTEGER NOT NULL,
+    notification_type Varchar NOT NULL,
+    "to" Varchar NOT NULL DEFAULT '',
+    cc Varchar NOT NULL DEFAULT '',
+    bcc Varchar NOT NULL DEFAULT '',
+    subject Varchar NOT NULL DEFAULT ''
+);
 
 -- configuration
 

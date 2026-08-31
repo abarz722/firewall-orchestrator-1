@@ -78,6 +78,7 @@ namespace FWO.Test
             Assert.That(actNotification.RecipientCc, Is.EqualTo(EmailRecipientOption.None));
             Assert.That(actNotification.Layout, Is.EqualTo(NotificationLayout.HtmlInBody));
             Assert.That(actNotification.Deadline, Is.EqualTo(FwoNotification.OfferedDeadlineOptions(NotificationClient.RuleTimer).Single()));
+            Assert.That(actNotification.Logging, Is.EqualTo(NotificationLoggingMode.SendOnly));
         }
 
         [Test]

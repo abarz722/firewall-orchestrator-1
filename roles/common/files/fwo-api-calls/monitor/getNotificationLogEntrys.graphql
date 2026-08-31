@@ -1,0 +1,11 @@
+query getNotificationLogEntrys {
+  notification_log(order_by: { timestamp: desc }) {
+    timestamp
+    notification_id
+    notification_type
+    to
+    cc
+    bcc
+    subject
+  }
+}

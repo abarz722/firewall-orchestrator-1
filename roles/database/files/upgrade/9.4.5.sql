@@ -111,6 +111,24 @@ update_reminder_bodies AS
 )
 SELECT 1;
 
+ALTER TABLE notification
+    ADD COLUMN IF NOT EXISTS logging Varchar NOT NULL DEFAULT 'send_only';
+
+UPDATE notification
+SET logging = 'send_only'
+WHERE COALESCE(logging, '') = '';
+
+CREATE TABLE IF NOT EXISTS notification_log
+(
+    "timestamp" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    notification_id INTEGER NOT NULL,
+    notification_type Varchar NOT NULL,
+    "to" Varchar NOT NULL DEFAULT '',
+    cc Varchar NOT NULL DEFAULT '',
+    bcc Varchar NOT NULL DEFAULT '',
+    subject Varchar NOT NULL DEFAULT ''
+);
+
 WITH decomm_config AS
 (
     SELECT

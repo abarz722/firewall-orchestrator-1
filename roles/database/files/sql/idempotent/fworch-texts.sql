@@ -3240,6 +3240,8 @@ INSERT INTO txt VALUES ('use_in_dst',           'German', 	'in Ziel');
 INSERT INTO txt VALUES ('use_in_dst',           'English', 	'in Destination');
 INSERT INTO txt VALUES ('email_subject',        'German', 	'Email-Betreff');
 INSERT INTO txt VALUES ('email_subject',        'English', 	'Email subject');
+INSERT INTO txt VALUES ('email_log',            'German', 	'Email-Protokoll');
+INSERT INTO txt VALUES ('email_log',            'English', 	'Email log');
 INSERT INTO txt VALUES ('email_body',           'German', 	'Email-Inhalt');
 INSERT INTO txt VALUES ('email_body',           'English', 	'Email body');
 INSERT INTO txt VALUES ('email_to',				'German', 	'An');
@@ -3347,6 +3349,14 @@ INSERT INTO txt VALUES ('reminder',             'German', 	'Erinnerung');
 INSERT INTO txt VALUES ('reminder',             'English',  'Reminder');
 INSERT INTO txt VALUES ('reminders',            'German', 	'Erinnerungsbenachrichtigungen');
 INSERT INTO txt VALUES ('reminders',            'English',  'Reminders');
+INSERT INTO txt VALUES ('logging_mode',         'German', 	'Protokollierungsmodus');
+INSERT INTO txt VALUES ('logging_mode',         'English',  'Logging mode');
+INSERT INTO txt VALUES ('send_only',            'German', 	'Nur senden');
+INSERT INTO txt VALUES ('send_only',            'English',  'Send only');
+INSERT INTO txt VALUES ('send_and_log',         'German', 	'Senden und protokollieren');
+INSERT INTO txt VALUES ('send_and_log',         'English',  'Send and log');
+INSERT INTO txt VALUES ('log_only',             'German', 	'Nur protokollieren');
+INSERT INTO txt VALUES ('log_only',             'English',  'Log only');
 INSERT INTO txt VALUES ('edit_notification',    'German', 	'Benachrichtigung bearbeiten');
 INSERT INTO txt VALUES ('edit_notification',    'English', 	'Edit Notification');
 INSERT INTO txt VALUES ('delete_notification',  'German', 	'Benachrichtigung l&ouml;schen');
@@ -5766,6 +5776,8 @@ INSERT INTO txt VALUES ('H4109', 'German',  'Name: Name der Benachrichtigung, nu
 INSERT INTO txt VALUES ('H4109', 'English', 'Name: Name of notification, only for display purposes.');
 INSERT INTO txt VALUES ('H4110', 'German',  'Email-Inhalt: Text der Benachrichtigung. Bei Layouts ohne Anhang kann der Platzhalter @@CONTENT@@ verwendet werden, um den erzeugten Inhalt an dieser Stelle einzuf&uuml;gen. Wenn ein App-Kontext vorhanden ist, werden auch @@APPNAME@@ und @@APPID@@ ersetzt. In Workflow-Aktionsmails wird zus&auml;tzlich @@REQUESTER@@ ersetzt, wenn das Ticket bekannt ist.');
 INSERT INTO txt VALUES ('H4110', 'English', 'Email body: Text of the notification. For layouts without attachment, the @@CONTENT@@ placeholder can be used to insert the generated content at this position. If an app context is available, @@APPNAME@@ and @@APPID@@ are replaced as well. In workflow action emails, @@REQUESTER@@ is also replaced when the ticket is known.');
+INSERT INTO txt VALUES ('H4111', 'German',  'Protokollierungsmodus: Legt fest, ob eine Benachrichtigung nur gesendet, nur protokolliert oder beides gemacht wird.');
+INSERT INTO txt VALUES ('H4111', 'English', 'Logging mode: Defines whether a notification is sent only, logged only, or both.');
 
 INSERT INTO txt VALUES ('H5001', 'German',  'In diesem Abschnitt werden die Setup- und Verwaltungseinstellungen behandelt.
     Die meisten Einstellungen k&ouml;nnen nur von Nutzern mit der Administrator-Rolle gesehen und ge&auml;ndert werden.
@@ -7926,6 +7938,11 @@ INSERT INTO txt VALUES ('H7412', 'English', 'With "Show orphaned only" all orpha
 INSERT INTO txt VALUES ('H7413', 'German', 'Die Tabellen sind in Abschnitte gegliedert. &Uuml;ber die Aktionsspalte k&ouml;nnen verwaiste Eintr&auml;ge aus der Verbindung entfernt werden.
 ');
 INSERT INTO txt VALUES ('H7413', 'English', 'The tables are grouped in sections. Use the action column to remove orphaned entries from the connection.
+');
+
+INSERT INTO txt VALUES ('H7414', 'German', 'Email-Protokoll: Zeigt alle protokollierten Benachrichtigungs-Emails mit Zeitstempel, Benachrichtigungstyp, Empf&auml;ngern und Betreff.
+');
+INSERT INTO txt VALUES ('H7414', 'English', 'Email log: Shows all logged notification emails with timestamp, notification type, recipients and subject.
 ');
 
 INSERT INTO txt VALUES ('H7421', 'German', 'Diese Seite zeigt alle angeforderten Schnittstellen mit beantragender und angefragter Applikation, Ticket, Status und Erstellungsdatum.

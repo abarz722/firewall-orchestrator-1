@@ -16,7 +16,7 @@
 @inject UserConfig userConfig
 
 <div class="input-group">
-    <h3>@(userConfig.GetText("notifications"))</h3>
+    <h3>@(userConfig.GetText("interfaces"))</h3>
     <HelpLink Page="settings/modellingnotifications" />
 </div>
 <hr />
@@ -107,11 +107,11 @@ else
             }
 
             await globalConfig.WriteToDatabase(configData, apiConnection);
-            DisplayMessageInUi(null, userConfig.GetText("notifications"), userConfig.GetText("U5301"), false);
+            DisplayMessageInUi(null, userConfig.GetText("interfaces"), userConfig.GetText("U5301"), false);
         }
         catch (Exception exception)
         {
-            DisplayMessageInUi(exception, userConfig.GetText("notifications"), "", true);
+            DisplayMessageInUi(exception, userConfig.GetText("interfaces"), "", true);
         }
     }
 }

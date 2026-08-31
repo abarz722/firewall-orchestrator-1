@@ -1,0 +1,5 @@
+mutation insertNotificationLog($entries: [notification_log_insert_input!]!) {
+  insert_notification_log(objects: $entries) {
+    affected_rows
+  }
+}

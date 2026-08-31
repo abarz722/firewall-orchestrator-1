@@ -11765,7 +11765,8 @@
                       "repetitions_after_deadline",
                       "schedule_id",
                       "user_id",
-                      "last_sent"
+                      "last_sent",
+                      "logging"
                     ]
                   },
                   "comment": ""
@@ -11800,7 +11801,8 @@
                       "repetitions_after_deadline",
                       "schedule_id",
                       "user_id",
-                      "last_sent"
+                      "last_sent",
+                      "logging"
                     ]
                   },
                   "comment": ""
@@ -11835,7 +11837,8 @@
                       "repetitions_after_deadline",
                       "schedule_id",
                       "user_id",
-                      "last_sent"
+                      "last_sent",
+                      "logging"
                     ]
                   },
                   "comment": ""
@@ -11870,7 +11873,8 @@
                       "repetitions_after_deadline",
                       "schedule_id",
                       "user_id",
-                      "last_sent"
+                      "last_sent",
+                      "logging"
                     ]
                   },
                   "comment": ""
@@ -11905,7 +11909,8 @@
                       "repetitions_after_deadline",
                       "schedule_id",
                       "user_id",
-                      "last_sent"
+                      "last_sent",
+                      "logging"
                     ]
                   },
                   "comment": ""
@@ -11940,7 +11945,8 @@
                       "repetitions_after_deadline",
                       "schedule_id",
                       "user_id",
-                      "last_sent"
+                      "last_sent",
+                      "logging"
                     ]
                   },
                   "comment": ""
@@ -11976,7 +11982,8 @@
                       "repetitions_after_deadline",
                       "schedule_id",
                       "user_id",
-                      "last_sent"
+                      "last_sent",
+                      "logging"
                     ],
                     "filter": {
                       "notification_client": {
@@ -12015,7 +12022,8 @@
                       "repetitions_after_deadline",
                       "schedule_id",
                       "user_id",
-                      "last_sent"
+                      "last_sent",
+                      "logging"
                     ],
                     "filter": {}
                   },
@@ -12050,7 +12058,8 @@
                       "repetitions_after_deadline",
                       "schedule_id",
                       "user_id",
-                      "last_sent"
+                      "last_sent",
+                      "logging"
                     ],
                     "filter": {
                       "_or": [
@@ -12098,7 +12107,8 @@
                       "repetitions_after_deadline",
                       "schedule_id",
                       "user_id",
-                      "last_sent"
+                      "last_sent",
+                      "logging"
                     ],
                     "filter": {
                       "notification_client": {
@@ -12137,7 +12147,8 @@
                       "repetitions_after_deadline",
                       "schedule_id",
                       "user_id",
-                      "last_sent"
+                      "last_sent",
+                      "logging"
                     ],
                     "filter": {}
                   },
@@ -12172,7 +12183,8 @@
                       "repetitions_after_deadline",
                       "schedule_id",
                       "user_id",
-                      "last_sent"
+                      "last_sent",
+                      "logging"
                     ],
                     "filter": {
                       "_or": [
@@ -12220,7 +12232,8 @@
                       "repetitions_after_deadline",
                       "schedule_id",
                       "user_id",
-                      "last_sent"
+                      "last_sent",
+                      "logging"
                     ],
                     "filter": {
                       "notification_client": {
@@ -12259,7 +12272,8 @@
                       "repetitions_after_deadline",
                       "schedule_id",
                       "user_id",
-                      "last_sent"
+                      "last_sent",
+                      "logging"
                     ],
                     "filter": {
                       "_or": [
@@ -12307,7 +12321,8 @@
                       "repetitions_after_deadline",
                       "schedule_id",
                       "user_id",
-                      "last_sent"
+                      "last_sent",
+                      "logging"
                     ],
                     "filter": {
                       "_or": [
@@ -12355,7 +12370,8 @@
                       "repetitions_after_deadline",
                       "schedule_id",
                       "user_id",
-                      "last_sent"
+                      "last_sent",
+                      "logging"
                     ],
                     "filter": {
                       "_or": [
@@ -12403,7 +12419,8 @@
                       "repetitions_after_deadline",
                       "schedule_id",
                       "user_id",
-                      "last_sent"
+                      "last_sent",
+                      "logging"
                     ],
                     "filter": {
                       "notification_client": {
@@ -12442,7 +12459,8 @@
                       "repetitions_after_deadline",
                       "schedule_id",
                       "user_id",
-                      "last_sent"
+                      "last_sent",
+                      "logging"
                     ],
                     "filter": {
                       "notification_client": {
@@ -12483,7 +12501,8 @@
                       "repetitions_after_deadline",
                       "schedule_id",
                       "user_id",
-                      "last_sent"
+                      "last_sent",
+                      "logging"
                     ],
                     "filter": {
                       "_and": [
@@ -12563,7 +12582,8 @@
                       "repetitions_after_deadline",
                       "schedule_id",
                       "user_id",
-                      "last_sent"
+                      "last_sent",
+                      "logging"
                     ],
                     "filter": {
                       "_or": [
@@ -12600,7 +12620,8 @@
                   "role": "middleware-server",
                   "permission": {
                     "columns": [
-                      "last_sent"
+                      "last_sent",
+                      "logging"
                     ],
                     "filter": {},
                     "check": {}
@@ -12636,7 +12657,8 @@
                       "repetitions_after_deadline",
                       "schedule_id",
                       "user_id",
-                      "last_sent"
+                      "last_sent",
+                      "logging"
                     ],
                     "filter": {
                       "_or": [
@@ -12698,7 +12720,8 @@
                       "repetitions_after_deadline",
                       "schedule_id",
                       "user_id",
-                      "last_sent"
+                      "last_sent",
+                      "logging"
                     ],
                     "filter": {
                       "_or": [
@@ -12760,7 +12783,8 @@
                       "repetitions_after_deadline",
                       "schedule_id",
                       "user_id",
-                      "last_sent"
+                      "last_sent",
+                      "logging"
                     ],
                     "filter": {
                       "_or": [
@@ -12822,7 +12846,8 @@
                       "repetitions_after_deadline",
                       "schedule_id",
                       "user_id",
-                      "last_sent"
+                      "last_sent",
+                      "logging"
                     ],
                     "filter": {
                       "_or": [
@@ -12983,6 +13008,96 @@
                         }
                       ]
                     }
+                  },
+                  "comment": ""
+                }
+              ]
+            },
+            {
+              "table": {
+                "name": "notification_log",
+                "schema": "public"
+              },
+              "insert_permissions": [
+                {
+                  "role": "fw-admin",
+                  "permission": {
+                    "check": {},
+                    "columns": [
+                      "timestamp",
+                      "notification_id",
+                      "notification_type",
+                      "to",
+                      "cc",
+                      "bcc",
+                      "subject"
+                    ]
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "middleware-server",
+                  "permission": {
+                    "check": {},
+                    "columns": [
+                      "timestamp",
+                      "notification_id",
+                      "notification_type",
+                      "to",
+                      "cc",
+                      "bcc",
+                      "subject"
+                    ]
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "modeller",
+                  "permission": {
+                    "check": {},
+                    "columns": [
+                      "timestamp",
+                      "notification_id",
+                      "notification_type",
+                      "to",
+                      "cc",
+                      "bcc",
+                      "subject"
+                    ]
+                  },
+                  "comment": ""
+                }
+              ],
+              "select_permissions": [
+                {
+                  "role": "auditor",
+                  "permission": {
+                    "columns": [
+                      "timestamp",
+                      "notification_id",
+                      "notification_type",
+                      "to",
+                      "cc",
+                      "bcc",
+                      "subject"
+                    ],
+                    "filter": {}
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "fw-admin",
+                  "permission": {
+                    "columns": [
+                      "timestamp",
+                      "notification_id",
+                      "notification_type",
+                      "to",
+                      "cc",
+                      "bcc",
+                      "subject"
+                    ],
+                    "filter": {}
                   },
                   "comment": ""
                 }

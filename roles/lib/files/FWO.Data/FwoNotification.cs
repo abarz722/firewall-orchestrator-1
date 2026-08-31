@@ -80,6 +80,25 @@ namespace FWO.Data
         }
     }
 
+    public static class NotificationLoggingMode
+    {
+        public const string SendOnly = "send_only";
+        public const string SendAndLog = "send_and_log";
+        public const string LogOnly = "log_only";
+
+        public static List<string> OfferedOptions() => [SendOnly, SendAndLog, LogOnly];
+
+        public static bool ShouldLog(string? loggingMode)
+        {
+            return loggingMode is SendAndLog or LogOnly;
+        }
+
+        public static bool ShouldSend(string? loggingMode)
+        {
+            return loggingMode != LogOnly;
+        }
+    }
+
     public class FwoNotification
     {
         public FwoNotification()
@@ -114,6 +133,7 @@ namespace FWO.Data
             RepeatOffsetAfterDeadline = notification.RepeatOffsetAfterDeadline;
             RepetitionsAfterDeadline = notification.RepetitionsAfterDeadline;
             LastSent = notification.LastSent;
+            Logging = notification.Logging;
         }
 
         [JsonProperty("id"), JsonPropertyName("id")]
@@ -200,6 +220,9 @@ namespace FWO.Data
 
         [JsonProperty("last_sent"), JsonPropertyName("last_sent")]
         public DateTime? LastSent { get; set; }
+
+        [JsonProperty("logging"), JsonPropertyName("logging")]
+        public string Logging { get; set; } = NotificationLoggingMode.SendOnly;
 
 
         public static List<NotificationDeadline> OfferedDeadlineOptions(NotificationClient client)

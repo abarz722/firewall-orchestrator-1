@@ -1,0 +1,62 @@
+@inject ApiConnection apiConnection
+@inject UserConfig userConfig
+
+@page "/monitoring/email_log"
+@attribute [Authorize(Roles = $"{Roles.Admin}, {Roles.FwAdmin}, {Roles.Auditor}")]
+
+<div class="input-group">
+    <h3>@(userConfig.GetText("email_log"))</h3>
+    <HelpLink Page="monitoring/email_log" />
+</div>
+@(userConfig.GetText("H7414"))
+<hr />
+
+@if (InitComplete)
+{
+    <div class="vheight75">
+        <PageSizeComponent PageSize="20" PageSizeCallback="UpdatePageSize"></PageSizeComponent>
+        <Table PageSize="PageSize" TableClass="table table-bordered table-sm th-bg-secondary table-responsive overflow-auto sticky-header" TableItem="NotificationLogEntry" Items="notificationLogEntries">
+            <Column TableItem="NotificationLogEntry" Title="@(userConfig.GetText("timestamp"))" Field="@(x => x.Timestamp)" Sortable="true" Filterable="true"/>
+            <Column TableItem="NotificationLogEntry" Title="@(userConfig.GetText("id"))" Field="@(x => x.NotificationId)" Sortable="true" Filterable="true"/>
+            <Column TableItem="NotificationLogEntry" Title="@(userConfig.GetText("notification"))" Field="@(x => x.NotificationType)" Sortable="true" Filterable="true"/>
+            <Column TableItem="NotificationLogEntry" Title="@(userConfig.GetText("to"))" Field="@(x => x.To)" Sortable="true" Filterable="true"/>
+            <Column TableItem="NotificationLogEntry" Title="@(userConfig.GetText("recipient_cc"))" Field="@(x => x.Cc)" Sortable="true" Filterable="true"/>
+            <Column TableItem="NotificationLogEntry" Title="@(userConfig.GetText("recipient_bcc"))" Field="@(x => x.Bcc)" Sortable="true" Filterable="true"/>
+            <Column TableItem="NotificationLogEntry" Title="@(userConfig.GetText("email_subject"))" Field="@(x => x.Subject)" Sortable="true" Filterable="true"/>
+            <Pager ShowPageNumber="true" ShowTotalCount="true" />
+        </Table>
+    </div>
+}
+else
+{
+    <Loading/>
+}
+
+@code
+{
+    [CascadingParameter]
+    Action<Exception?, string, string, bool> DisplayMessageInUi { get; set; } = DefaultInit.DoNothing;
+
+    private List<NotificationLogEntry> notificationLogEntries = [];
+    private bool InitComplete = false;
+
+    private int PageSize { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            notificationLogEntries = await apiConnection.SendQueryAsync<List<NotificationLogEntry>>(MonitorQueries.getNotificationLogEntrys);
+            InitComplete = true;
+        }
+        catch (Exception exception)
+        {
+            DisplayMessageInUi(exception, userConfig.GetText("fetch_log_entrys"), "", true);
+        }
+    }
+
+    private void UpdatePageSize(int pageSize)
+    {
+        PageSize = pageSize;
+    }
+}

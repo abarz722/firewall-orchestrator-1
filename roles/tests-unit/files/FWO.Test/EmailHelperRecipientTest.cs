@@ -166,6 +166,81 @@ namespace FWO.Test
         }
 
         [Test]
+        public async Task SendEmailToNotificationRecipients_SendAndLog_WritesNotificationLogAndSendsEmail()
+        {
+            SimulatedUserConfig userConfig = new()
+            {
+                UseDummyEmailAddress = false
+            };
+            RecordingNotificationLogApiConnection apiConnection = new();
+            CapturingEmailHelper helper = new(userConfig, apiConnection);
+
+            FwoNotification notification = new()
+            {
+                Id = 41,
+                NotificationClient = NotificationClient.InterfaceRequest,
+                Logging = NotificationLoggingMode.SendAndLog,
+                RecipientTo = EmailRecipientOption.OtherAddresses,
+                EmailAddressTo = "to@example.test",
+                RecipientCc = EmailRecipientOption.OtherAddresses,
+                EmailAddressCc = "cc@example.test",
+                RecipientBcc = EmailRecipientOption.OtherAddresses,
+                EmailAddressBcc = "bcc@example.test",
+                EmailSubject = "Subject",
+                EmailBody = "Body"
+            };
+
+            bool sent = await helper.SendEmailToNotificationRecipients(notification, null, "Rendered subject", "Rendered body");
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(sent, Is.True);
+                Assert.That(helper.SendEmailCallCount, Is.EqualTo(1));
+                Assert.That(apiConnection.InsertCalls, Has.Count.EqualTo(1));
+                Assert.That(apiConnection.InsertCalls[0].NotificationId, Is.EqualTo(41));
+                Assert.That(apiConnection.InsertCalls[0].NotificationType, Is.EqualTo(NotificationClient.InterfaceRequest.ToString()));
+                Assert.That(apiConnection.InsertCalls[0].To, Is.EqualTo("to@example.test"));
+                Assert.That(apiConnection.InsertCalls[0].Cc, Is.EqualTo("cc@example.test"));
+                Assert.That(apiConnection.InsertCalls[0].Bcc, Is.EqualTo("bcc@example.test"));
+                Assert.That(apiConnection.InsertCalls[0].Subject, Is.EqualTo("Rendered subject"));
+                Assert.That(apiConnection.InsertCalls[0].Timestamp, Is.GreaterThan(DateTimeOffset.UtcNow.AddMinutes(-1)));
+            });
+        }
+
+        [Test]
+        public async Task SendEmailToNotificationRecipients_LogOnly_WritesNotificationLogWithoutSendingEmail()
+        {
+            SimulatedUserConfig userConfig = new()
+            {
+                UseDummyEmailAddress = false
+            };
+            RecordingNotificationLogApiConnection apiConnection = new();
+            CapturingEmailHelper helper = new(userConfig, apiConnection);
+
+            FwoNotification notification = new()
+            {
+                Id = 42,
+                NotificationClient = NotificationClient.AppDecomm,
+                Logging = NotificationLoggingMode.LogOnly,
+                RecipientTo = EmailRecipientOption.OtherAddresses,
+                EmailAddressTo = "to@example.test",
+                EmailSubject = "Subject",
+                EmailBody = "Body"
+            };
+
+            bool sent = await helper.SendEmailToNotificationRecipients(notification, null, "Rendered subject", "Rendered body");
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(sent, Is.True);
+                Assert.That(helper.SendEmailCallCount, Is.Zero);
+                Assert.That(apiConnection.InsertCalls, Has.Count.EqualTo(1));
+                Assert.That(apiConnection.InsertCalls[0].NotificationId, Is.EqualTo(42));
+                Assert.That(apiConnection.InsertCalls[0].Subject, Is.EqualTo("Rendered subject"));
+            });
+        }
+
+        [Test]
         public async Task SendWorkflowActionEmail_UsesWorkflowRecipientsAndPlaceholderObject()
         {
             SimulatedUserConfig userConfig = new()
@@ -1169,6 +1244,7 @@ namespace FWO.Test
 
         private sealed class CapturingEmailHelper : EmailHelper
         {
+            public int SendEmailCallCount { get; private set; }
             public List<string> CapturedTo { get; private set; } = [];
             public List<string>? CapturedCc { get; private set; }
             public List<string>? CapturedBcc { get; private set; }
@@ -1177,13 +1253,14 @@ namespace FWO.Test
             public bool CapturedMailFormatHtml { get; private set; }
             public FormFile? CapturedAttachment { get; private set; }
 
-            public CapturingEmailHelper(UserConfig userConfig)
-                : base(new SimulatedApiConnection(), null, userConfig, DefaultInit.DoNothing)
+            public CapturingEmailHelper(UserConfig userConfig, ApiConnection? apiConnection = null)
+                : base(apiConnection ?? new SimulatedApiConnection(), null, userConfig, DefaultInit.DoNothing)
             {
             }
 
             protected override Task<bool> SendEmail(List<string> tos, string subject, string body, List<string>? ccs = null, List<string>? bccs = null, bool mailFormatHtml = true, Microsoft.AspNetCore.Http.FormFile? attachment = null)
             {
+                SendEmailCallCount++;
                 CapturedTo = [.. tos];
                 CapturedCc = ccs == null ? null : [.. ccs];
                 CapturedBcc = bccs == null ? null : [.. bccs];
@@ -1192,6 +1269,30 @@ namespace FWO.Test
                 CapturedMailFormatHtml = mailFormatHtml;
                 CapturedAttachment = attachment;
                 return Task.FromResult(true);
+            }
+        }
+
+        private sealed class RecordingNotificationLogApiConnection : SimulatedApiConnection
+        {
+            public List<NotificationLogEntry> InsertCalls { get; } = [];
+
+            public override Task<QueryResponseType> SendQueryAsync<QueryResponseType>(string query, object? variables = null, string? operationName = null, FWO.Api.Client.QueryChunkingOptions? chunkingOptions = null)
+            {
+                if (query == NotificationQueries.insertNotificationLog && typeof(QueryResponseType) == typeof(object))
+                {
+                    if (variables != null)
+                    {
+                        PropertyInfo? entriesProperty = variables.GetType().GetProperty("entries");
+                        if (entriesProperty?.GetValue(variables) is IEnumerable<NotificationLogEntry> entries)
+                        {
+                            InsertCalls.AddRange(entries);
+                        }
+                    }
+
+                    return Task.FromResult((QueryResponseType)(object)new object());
+                }
+
+                throw new NotImplementedException();
             }
         }
 

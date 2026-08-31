@@ -8,6 +8,7 @@ namespace FWO.Api.Client.Queries
         public static readonly string addNotification;
         public static readonly string updateNotification;
         public static readonly string updateNotificationsLastSent;
+        public static readonly string insertNotificationLog;
 
         public static readonly string deleteNotification;
 
@@ -20,6 +21,7 @@ namespace FWO.Api.Client.Queries
                 addNotification = File.ReadAllText(QueryPath + "notification/addNotification.graphql");
                 updateNotification = File.ReadAllText(QueryPath + "notification/updateNotification.graphql");
                 updateNotificationsLastSent = File.ReadAllText(QueryPath + "notification/updateNotificationsLastSent.graphql");
+                insertNotificationLog = File.ReadAllText(QueryPath + "notification_log/insertNotificationLog.graphql");
                 deleteNotification = File.ReadAllText(QueryPath + "notification/deleteNotification.graphql");
             }
             catch (Exception exception)

@@ -33,7 +33,7 @@ namespace FWO.Test
 
             page.WaitForAssertion(() =>
             {
-                Assert.That(page.Markup, Does.Contain("Notifications"));
+                Assert.That(page.Markup, Does.Contain("Interfaces"));
                 Assert.That(page.Markup, Does.Contain("Initial request"));
                 Assert.That(page.Markup, Does.Contain("Reminder"));
                 Assert.That(page.Markup, Does.Contain("Decommission"));
@@ -125,7 +125,7 @@ namespace FWO.Test
             page.WaitForAssertion(() =>
             {
                 Assert.That(messages, Has.Count.EqualTo(1));
-                Assert.That(messages[0].Title, Is.EqualTo(new SimulatedUserConfig().GetText("notifications")));
+                Assert.That(messages[0].Title, Is.EqualTo(new SimulatedUserConfig().GetText("interfaces")));
                 Assert.That(messages[0].IsError, Is.True);
             });
         }
