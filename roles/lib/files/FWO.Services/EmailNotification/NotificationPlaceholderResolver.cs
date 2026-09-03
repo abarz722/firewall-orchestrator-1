@@ -45,10 +45,18 @@ namespace FWO.Services
         /// <summary>
         /// Replaces workflow placeholders.
         /// </summary>
-        public static string ReplaceWorkflowPlaceholders(string text, WfStatefulObject statefulObject, FwoOwner? owner)
+        public static string ReplaceWorkflowPlaceholders(string text, WfStatefulObject statefulObject, FwoOwner? owner,
+            NotificationPlaceholderData? placeholderData = null, bool renderHtmlLinks = false)
         {
-            return ReplaceOwnerPlaceholders(text, owner ?? GetWorkflowOwner(statefulObject))
-                .Replace(Placeholder.REQUESTER, GetRequesterName(statefulObject));
+            NotificationPlaceholderValues values = new()
+            {
+                Application = owner ?? GetWorkflowOwner(statefulObject) ?? new(),
+                RequesterName = GetRequesterName(statefulObject),
+                Reason = GetWorkflowReason(statefulObject),
+                RequestDate = GetWorkflowRequestDate(statefulObject)
+            };
+            values = ApplyWorkflowPlaceholderData(values, placeholderData);
+            return ReplaceNotificationPlaceholders(text, values, renderHtmlLinks);
         }
 
         /// <summary>
@@ -88,6 +96,51 @@ namespace FWO.Services
                 return FirstNonEmpty(ticket.Requester?.Name, ticket.RequesterDn);
             }
             return "";
+        }
+
+        private static string GetWorkflowReason(WfStatefulObject statefulObject)
+        {
+            return statefulObject switch
+            {
+                WfTicket ticket => ticket.Reason ?? "",
+                WfReqTask reqTask => reqTask.Reason ?? "",
+                WfImplTask implTask => implTask.Comments.LastOrDefault()?.Comment.CommentText ?? "",
+                _ => statefulObject.OptComment() ?? ""
+            };
+        }
+
+        private static string GetWorkflowRequestDate(WfStatefulObject statefulObject)
+        {
+            return statefulObject is WfTicket ticket && ticket.CreationDate != default
+                ? ticket.CreationDate.ToString("dd.MM.yyyy")
+                : "";
+        }
+
+        private static NotificationPlaceholderValues ApplyWorkflowPlaceholderData(NotificationPlaceholderValues values, NotificationPlaceholderData? data)
+        {
+            if (data == null)
+            {
+                return values;
+            }
+
+            return values with
+            {
+                RequestingOwner = !string.IsNullOrWhiteSpace(data.RequestingAppName) || !string.IsNullOrWhiteSpace(data.RequestingAppId)
+                    ? new FwoOwner { Name = data.RequestingAppName, ExtAppId = data.RequestingAppId }
+                    : values.RequestingOwner,
+                InterfaceName = FirstNonEmpty(data.InterfaceName, values.InterfaceName),
+                InterfaceLinkText = FirstNonEmpty(data.InterfaceLinkText, values.InterfaceLinkText),
+                InterfaceLinkName = FirstNonEmpty(data.InterfaceLinkName, values.InterfaceLinkName),
+                InterfaceLinkUrl = FirstNonEmpty(data.InterfaceLinkUrl, values.InterfaceLinkUrl),
+                NewInterfaceName = FirstNonEmpty(data.NewInterfaceName, values.NewInterfaceName),
+                NewInterfaceLinkText = FirstNonEmpty(data.NewInterfaceLinkText, values.NewInterfaceLinkText),
+                NewInterfaceLinkName = FirstNonEmpty(data.NewInterfaceLinkName, values.NewInterfaceLinkName),
+                NewInterfaceLinkUrl = FirstNonEmpty(data.NewInterfaceLinkUrl, values.NewInterfaceLinkUrl),
+                Reason = FirstNonEmpty(data.Reason, values.Reason),
+                UserName = FirstNonEmpty(data.UserName, values.UserName),
+                RequesterName = FirstNonEmpty(data.RequesterName, values.RequesterName),
+                RequestDate = FirstNonEmpty(data.RequestDate, values.RequestDate)
+            };
         }
 
         private static string FirstNonEmpty(params string?[] values)

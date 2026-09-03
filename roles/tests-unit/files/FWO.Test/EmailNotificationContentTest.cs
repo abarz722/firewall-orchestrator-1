@@ -349,6 +349,57 @@ namespace FWO.Test
         }
 
         [Test]
+        public void ReplaceWorkflowPlaceholdersAppliesCallerProvidedContext()
+        {
+            WfTicket ticket = new()
+            {
+                Requester = new() { Name = "Requester" },
+                Reason = "Original reason",
+                CreationDate = new DateTime(2025, 1, 2)
+            };
+            NotificationPlaceholderData placeholderData = new()
+            {
+                RequestingAppName = "Requesting App",
+                RequestingAppId = "REQ-APP",
+                InterfaceName = "old-interface",
+                InterfaceLinkText = "Interface",
+                InterfaceLinkName = "old-interface",
+                InterfaceLinkUrl = "https://example.test/old",
+                NewInterfaceName = "new-interface",
+                NewInterfaceLinkText = "New interface",
+                NewInterfaceLinkName = "new-interface",
+                NewInterfaceLinkUrl = "https://example.test/new",
+                Reason = "Rejected reason",
+                UserName = "Rejecter",
+                RequestDate = "03.01.2025"
+            };
+
+            string text = NotificationPlaceholderResolver.ReplaceWorkflowPlaceholders(
+                string.Join("|", new List<string>
+                {
+                    Placeholder.APPNAME,
+                    Placeholder.APPID,
+                    Placeholder.REQUESTER,
+                    Placeholder.REQUESTING_APPNAME,
+                    Placeholder.REQUESTING_APPID,
+                    Placeholder.INTERFACE_NAME,
+                    Placeholder.INTERFACE_LINK,
+                    Placeholder.NEW_INTERFACE_NAME,
+                    Placeholder.NEW_INTERFACE_LINK,
+                    Placeholder.REASON,
+                    Placeholder.USER_NAME,
+                    Placeholder.REQUESTDATE
+                }),
+                ticket,
+                new FwoOwner { Name = "Owner", ExtAppId = "APP-1" },
+                placeholderData,
+                renderHtmlLinks: true);
+
+            Assert.That(text, Is.EqualTo(
+                "Owner|APP-1|Requester|Requesting App|REQ-APP|old-interface|<a target=\"_blank\" href=\"https://example.test/old\">Interface: old-interface</a>|new-interface|<a target=\"_blank\" href=\"https://example.test/new\">New interface: new-interface</a>|Rejected reason|Rejecter|03.01.2025"));
+        }
+
+        [Test]
         public void ReplaceOwnerPlaceholdersReplacesAppAndTimeInterval()
         {
             FwoOwner owner = new()

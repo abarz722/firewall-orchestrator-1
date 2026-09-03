@@ -13,6 +13,7 @@ namespace FWO.Data.Middleware
         public bool StateChangedByCreation { get; set; }
         public string Phase { get; set; } = WorkflowPhases.request.ToString();
         public string ExecutionMode { get; set; } = "";
+        public NotificationPlaceholderData? NotificationPlaceholders { get; set; }
     }
 
     public class WorkflowActionResult

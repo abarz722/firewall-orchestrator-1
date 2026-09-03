@@ -258,7 +258,8 @@ namespace FWO.Services.Workflow
                 NewStateId = statefulObject.StateId,
                 StateChangedByCreation = statefulObject.StateChangedByCreation(),
                 Phase = wfHandler.Phase.ToString(),
-                ExecutionMode = wfHandler.userConfig.ExecutionMode
+                ExecutionMode = wfHandler.userConfig.ExecutionMode,
+                NotificationPlaceholders = statefulObject.NotificationPlaceholders
             };
         }
 

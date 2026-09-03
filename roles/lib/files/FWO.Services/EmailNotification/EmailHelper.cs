@@ -112,7 +112,8 @@ namespace FWO.Services
         /// Sends an immediate workflow action email using notification recipient fields.
         /// </summary>
         public async Task<bool> SendWorkflowActionEmail(FwoNotification notification, WfStatefulObject statefulObject, FwoOwner? owner, string? userGrpDn = null,
-            WorkflowEmailContent? workflowContent = null, WfStatefulObject? placeholderObject = null)
+            WorkflowEmailContent? workflowContent = null, WfStatefulObject? placeholderObject = null,
+            NotificationPlaceholderData? placeholderData = null)
         {
             List<string> tos = await GetWorkflowActionRecipients(notification.RecipientTo, notification.EmailAddressTo, statefulObject, owner, ScopedUserTo, ScopedUserEmailTo, userGrpDn);
             List<string>? ccs = notification.RecipientCc == EmailRecipientOption.None
@@ -122,8 +123,9 @@ namespace FWO.Services
                 ? null
                 : await GetWorkflowActionRecipients(notification.RecipientBcc, notification.EmailAddressBcc, statefulObject, owner, ScopedUserBcc, ScopedUserEmailBcc, userGrpDn);
             WfStatefulObject placeholderContext = placeholderObject ?? statefulObject;
-            string subject = NotificationPlaceholderResolver.ReplaceWorkflowPlaceholders(notification.EmailSubject, placeholderContext, owner);
-            string body = NotificationPlaceholderResolver.ReplaceWorkflowPlaceholders(NotificationEmailLayoutHelper.BuildBody(notification, workflowContent), placeholderContext, owner);
+            string subject = NotificationPlaceholderResolver.ReplaceWorkflowPlaceholders(notification.EmailSubject, placeholderContext, owner, placeholderData);
+            string body = NotificationPlaceholderResolver.ReplaceWorkflowPlaceholders(NotificationEmailLayoutHelper.BuildBody(notification, workflowContent), placeholderContext, owner,
+                placeholderData, renderHtmlLinks: true);
             FormFile? attachment = await NotificationEmailLayoutHelper.BuildAttachment(notification.Layout, workflowContent, subject);
             return await SendEmail(tos, subject, body, ccs, bccs,
                 notification.Layout == NotificationLayout.HtmlInBody, attachment);

@@ -40,6 +40,12 @@ namespace FWO.Data.Workflow
         [JsonProperty("assigned_group"), JsonPropertyName("assigned_group")]
         public string? AssignedGroup { get; set; }
 
+        /// <summary>
+        /// Carries caller-supplied values for workflow notification placeholders.
+        /// </summary>
+        [JsonProperty("notification_placeholders"), JsonPropertyName("notification_placeholders")]
+        public NotificationPlaceholderData? NotificationPlaceholders { get; set; }
+
 
         // need private declarations, else we get problems with request_reqtask_arr_rel_insert_input in newTicket
         private int stateId;
@@ -101,6 +107,7 @@ namespace FWO.Data.Workflow
             CurrentHandler = obj.CurrentHandler;
             RecentHandler = obj.RecentHandler;
             AssignedGroup = obj.AssignedGroup;
+            NotificationPlaceholders = obj.NotificationPlaceholders;
         }
 
         public virtual bool Sanitize()

@@ -156,15 +156,17 @@ namespace FWO.Services.Workflow
         /// <summary>
         /// Promotes the first new-interface implementation task of the given ticket.
         /// </summary>
-        public async Task<bool> PromoteNewInterfaceImplTask(long ticketId, ExtStates extState, string comment = "")
+        public async Task<bool> PromoteNewInterfaceImplTask(long ticketId, ExtStates extState, string comment = "",
+            NotificationPlaceholderData? placeholderData = null)
         {
-            return await PromoteNewInterfaceImplTasks(ticketId, extState, null, comment) > 0;
+            return await PromoteNewInterfaceImplTasks(ticketId, extState, null, comment, placeholderData) > 0;
         }
 
         /// <summary>
         /// Promotes selected new-interface implementation tasks of the given ticket.
         /// </summary>
-        public async Task<int> PromoteNewInterfaceImplTasks(long ticketId, ExtStates extState, IEnumerable<long>? requestTaskIds, string comment = "")
+        public async Task<int> PromoteNewInterfaceImplTasks(long ticketId, ExtStates extState, IEnumerable<long>? requestTaskIds, string comment = "",
+            NotificationPlaceholderData? placeholderData = null)
         {
             ExtStateHandler extStateHandler = new(apiConnection);
             await wfHandler.Init();
@@ -179,6 +181,7 @@ namespace FWO.Services.Workflow
             foreach (WfImplTask implTask in implTasks)
             {
                 await wfHandler.ContinueImplPhase(implTask);
+                wfHandler.ActImplTask.NotificationPlaceholders = placeholderData;
                 if (comment != "")
                 {
                     await wfHandler.ConfAddCommentToImplTask(comment);

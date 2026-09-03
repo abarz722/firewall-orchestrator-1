@@ -181,6 +181,8 @@ namespace FWO.Middleware.Server.Controllers
                 return result;
             }
 
+            statefulObject.NotificationPlaceholders = parameters.NotificationPlaceholders;
+
             if (!await CallerCanAccessVisibility(User, wfHandler, scope, statefulObject))
             {
                 SetWarning(result, $"User is not authorized to access workflow visibility for scope '{scope}' and state {statefulObject.StateId}.");

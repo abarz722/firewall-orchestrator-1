@@ -341,6 +341,41 @@ namespace FWO.Test
         }
 
         [Test]
+        public void RejectInterfacePopup_BuildsNotificationContextWithRejectReason()
+        {
+            using BunitContext context = CreateContext(Roles.Admin, Roles.Modeller);
+            SimulatedUserConfig userConfig = (SimulatedUserConfig)context.Services.GetRequiredService<UserConfig>();
+            userConfig.User.Roles = [Roles.Admin, Roles.Modeller];
+            userConfig.SetExecutionMode(Roles.Admin);
+            ModellingConnection actConn = new()
+            {
+                Id = 21,
+                Name = "iface21",
+                App = new FwoOwner { Name = "Requesting App", ExtAppId = "REQ-APP" },
+                CreationDate = new DateTime(2025, 1, 2),
+                IsInterface = true
+            };
+            ModellingConnectionHandler handler = CreateConnectionHandler(new RejectInterfacePopupTestApiConn(), userConfig, actConn);
+            handler.Application.ExtAppId = "OWNER-APP";
+            IRenderedComponent<RejectInterfacePopup> component = RenderRejectInterfacePopup(
+                context, handler, allowAdminReject: true);
+
+            component.Find("textarea").Change("not approved");
+            MethodInfo method = typeof(RejectInterfacePopup).GetMethod("BuildNotificationPlaceholderData", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            NotificationPlaceholderData data = (NotificationPlaceholderData)method.Invoke(component.Instance, null)!;
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(data.InterfaceName, Is.EqualTo("iface21"));
+                Assert.That(data.RequestingAppName, Is.EqualTo("Requesting App"));
+                Assert.That(data.RequestingAppId, Is.EqualTo("REQ-APP"));
+                Assert.That(data.Reason, Is.EqualTo("not approved"));
+                Assert.That(data.RequestDate, Is.EqualTo("02.01.2025"));
+                Assert.That(data.InterfaceLinkUrl, Is.EqualTo("https://fwo.example/networkmodelling/OWNER-APP/21"));
+            });
+        }
+
+        [Test]
         public async Task RejectInterfacePopup_Reject_SavesPropertiesAndRemovesSelection()
         {
             using BunitContext context = CreateContext(Roles.Admin, Roles.Modeller);
