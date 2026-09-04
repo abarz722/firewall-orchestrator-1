@@ -1,4 +1,4 @@
-﻿-- text codes (roughly) categorized:
+-- text codes (roughly) categorized:
 -- U: user texts (explanation or confirmation texts)
 -- E: error texts
 -- A: Api errors
@@ -3403,6 +3403,8 @@ INSERT INTO txt VALUES ('accesstoken_lifetime', 'German', 	'Access Token G&uuml;
 INSERT INTO txt VALUES ('accesstoken_lifetime', 'English',  'Access Token Lifetime');
 INSERT INTO txt VALUES ('refreshtoken_lifetime','German',   'Refresh Token G&uuml;ltigkeitsdauer');
 INSERT INTO txt VALUES ('refreshtoken_lifetime','English',  'Refresh Token Lifetime');
+INSERT INTO txt VALUES ('path_analysis_algorithm','German', 'Pfadanalyse Algorithmus');
+INSERT INTO txt VALUES ('path_analysis_algorithm','English','Path Analysis Algorithm');
 
 -- monitoring
 INSERT INTO txt VALUES ('system',               'German', 	'System');
