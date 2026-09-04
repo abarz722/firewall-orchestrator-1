@@ -345,6 +345,7 @@ namespace FWO.Test
         {
             using BunitContext context = CreateContext(Roles.Admin, Roles.Modeller);
             SimulatedUserConfig userConfig = (SimulatedUserConfig)context.Services.GetRequiredService<UserConfig>();
+            userConfig.UiHostName = "https://fwo.example";
             userConfig.User.Roles = [Roles.Admin, Roles.Modeller];
             userConfig.SetExecutionMode(Roles.Admin);
             ModellingConnection actConn = new()
