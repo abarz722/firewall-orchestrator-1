@@ -1,44 +1,231 @@
--- Groups carry no protocol of their own - their members do. Fmgr imports were
--- previously normalizing service groups (svc_typ_id 2) with a concrete
--- ip_proto_id (0 or the group's own protocol selector) instead of NULL.
--- Align already-imported data with the corrected importers so the next
--- import does not report this as a change.
-UPDATE firewall.nw_service
-SET ip_proto_id = NULL
-WHERE svc_typ_id = 2
-    AND ip_proto_id IS NOT NULL;
+-- migrate interface request notification text from legacy config to notification rows
+WITH request_config AS
+(
+    SELECT
+        MAX(CASE WHEN config_key = 'modReqEmailReceiver' THEN COALESCE(config_value, '') END) AS recipients,
+        MAX(CASE WHEN config_key = 'modReqEmailSubject' THEN COALESCE(config_value, '') END) AS subject,
+        MAX(CASE WHEN config_key = 'modReqEmailBody' THEN COALESCE(config_value, '') END) AS body,
+        MAX(CASE WHEN config_key = 'modUnansweredReqEmailBody' THEN COALESCE(config_value, '') END) AS reminder_body
+    FROM config
+    WHERE config_user = 0
+      AND config_key IN ('modReqEmailReceiver', 'modReqEmailSubject', 'modReqEmailBody', 'modUnansweredReqEmailBody')
+),
+initial_notification_seed AS
+(
+    SELECT COUNT(*) AS notification_count
+    FROM notification
+    WHERE notification_client = 'InterfaceRequest'
+      AND COALESCE(deadline, 'None') = 'None'
+),
+reminder_notification_seed AS
+(
+    SELECT COUNT(*) AS notification_count
+    FROM notification
+    WHERE notification_client = 'InterfaceRequest'
+      AND deadline = 'RequestDate'
+),
+insert_initial_notification AS
+(
+    INSERT INTO notification
+    (
+        notification_client,
+        name,
+        channel,
+        recipient_to,
+        email_address_to,
+        recipient_cc,
+        email_address_cc,
+        recipient_bcc,
+        email_address_bcc,
+        email_subject,
+        email_body,
+        layout,
+        deadline,
+        interval_before_deadline,
+        offset_before_deadline,
+        repeat_interval_after_deadline,
+        initial_offset_after_deadline,
+        repeat_offset_after_deadline,
+        repetitions_after_deadline
+    )
+    SELECT
+        'InterfaceRequest',
+        'Interface requested',
+        'Email',
+        CASE
+            WHEN recipients = '' THEN 'None'
+            WHEN recipients LIKE '{%' THEN 'ConfiguredResponsibles'
+            ELSE 'OtherAddresses'
+        END,
+        recipients,
+        'None',
+        '',
+        'None',
+        '',
+        CASE
+            WHEN LENGTH(subject) = 0 THEN 'Interface requested'
+            ELSE subject
+        END,
+        body,
+        'SimpleText',
+        'None',
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL
+    FROM request_config
+    CROSS JOIN initial_notification_seed
+    WHERE notification_count = 0
+      AND recipients <> ''
+    RETURNING 1
+),
+update_initial_bodies AS
+(
+    UPDATE notification n
+    SET email_body = CASE
+        WHEN COALESCE(n.email_body, '') = '' THEN request_config.body
+        ELSE n.email_body
+    END
+    FROM request_config
+    CROSS JOIN initial_notification_seed
+    WHERE n.notification_client = 'InterfaceRequest'
+      AND COALESCE(n.deadline, 'None') = 'None'
+      AND initial_notification_seed.notification_count > 0
+    RETURNING 1
+),
+update_reminder_bodies AS
+(
+    UPDATE notification n
+    SET email_body = CASE
+        WHEN COALESCE(n.email_body, '') = '' THEN request_config.reminder_body
+        ELSE n.email_body
+    END
+    FROM request_config
+    CROSS JOIN reminder_notification_seed
+    WHERE n.notification_client = 'InterfaceRequest'
+      AND n.deadline = 'RequestDate'
+      AND reminder_notification_seed.notification_count > 0
+    RETURNING 1
+)
+SELECT 1;
 
+ALTER TABLE notification
+    ADD COLUMN IF NOT EXISTS logging Varchar NOT NULL DEFAULT 'send_only';
 
--- Insert default configuration for compliance diff filter
-INSERT INTO config (config_key, config_value, config_user)
-VALUES ('complianceDiffFilterExistingViolations', 'false', 0)
-ON CONFLICT (config_key, config_user) DO NOTHING;
+UPDATE notification
+SET logging = 'send_only'
+WHERE COALESCE(logging, '') = '';
 
+CREATE TABLE IF NOT EXISTS notification_log
+(
+    "timestamp" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    notification_id INTEGER NOT NULL,
+    notification_type Varchar NOT NULL,
+    "to" Varchar NOT NULL DEFAULT '',
+    cc Varchar NOT NULL DEFAULT '',
+    bcc Varchar NOT NULL DEFAULT '',
+    subject Varchar NOT NULL DEFAULT ''
+);
 
--- Flow accesses created by the request workflow before 9.4.5 stored group based sources,
--- destinations and services as group references only, although their access hash was calculated
--- from the hashes of the group members. The member references in flow.access_source,
--- flow.access_destination and flow.access_service were left out.
--- An access without members cannot be hashed again (an access needs at least one source,
--- destination and service), so the flow sync keeps skipping every affected management.
--- Restore the missing member references from the group memberships. Flow groups are immutable
--- (their hash is derived from their members), so this reproduces exactly the member set the
--- stored access hash was calculated from.
-
-INSERT INTO flow.access_source (access_id, nwobj_id)
-SELECT DISTINCT access_group.access_id, group_member.nwobj_id
-FROM flow.access_source_grp AS access_group
-    JOIN flow.nwgroup_member AS group_member ON group_member.nwgrp_id = access_group.nwgrp_id
-ON CONFLICT DO NOTHING;
-
-INSERT INTO flow.access_destination (access_id, nwobj_id)
-SELECT DISTINCT access_group.access_id, group_member.nwobj_id
-FROM flow.access_destination_grp AS access_group
-    JOIN flow.nwgroup_member AS group_member ON group_member.nwgrp_id = access_group.nwgrp_id
-ON CONFLICT DO NOTHING;
-
-INSERT INTO flow.access_service (access_id, svcobj_id)
-SELECT DISTINCT access_group.access_id, group_member.svcobj_id
-FROM flow.access_service_grp AS access_group
-    JOIN flow.svcgroup_member AS group_member ON group_member.svcgrp_id = access_group.svcgrp_id
-ON CONFLICT DO NOTHING;
+WITH decomm_config AS
+(
+    SELECT
+        MAX(CASE WHEN config_key = 'modDecommEmailReceiver' THEN COALESCE(config_value, '') END) AS recipients,
+        MAX(CASE WHEN config_key = 'modDecommEmailOtherAddresses' THEN COALESCE(config_value, '') END) AS other_addresses,
+        MAX(CASE WHEN config_key = 'modDecommEmailSubject' THEN COALESCE(config_value, '') END) AS subject,
+        MAX(CASE WHEN config_key = 'modDecommEmailBody' THEN COALESCE(config_value, '') END) AS body
+    FROM config
+    WHERE config_user = 0
+      AND config_key IN ('modDecommEmailReceiver', 'modDecommEmailOtherAddresses', 'modDecommEmailSubject', 'modDecommEmailBody')
+),
+decomm_notification_seed AS
+(
+    SELECT COUNT(*) AS notification_count
+    FROM notification
+    WHERE notification_client = 'AppDecomm'
+      AND COALESCE(deadline, 'None') = 'None'
+),
+insert_decomm_notification AS
+(
+    INSERT INTO notification
+    (
+        notification_client,
+        name,
+        channel,
+        recipient_to,
+        email_address_to,
+        recipient_cc,
+        email_address_cc,
+        recipient_bcc,
+        email_address_bcc,
+        email_subject,
+        email_body,
+        layout,
+        deadline,
+        interval_before_deadline,
+        offset_before_deadline,
+        repeat_interval_after_deadline,
+        initial_offset_after_deadline,
+        repeat_offset_after_deadline,
+        repetitions_after_deadline
+    )
+    SELECT
+        'AppDecomm',
+        'Interface decommissioned',
+        'Email',
+        CASE
+            WHEN recipients = '' AND other_addresses <> '' THEN 'OtherAddresses'
+            WHEN recipients = '' THEN 'None'
+            ELSE recipients
+        END,
+        other_addresses,
+        'None',
+        '',
+        'None',
+        '',
+        CASE
+            WHEN LENGTH(subject) = 0 THEN 'Interface decommissioned'
+            ELSE subject
+        END,
+        body,
+        'SimpleText',
+        'None',
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL
+    FROM decomm_config
+    CROSS JOIN decomm_notification_seed
+    WHERE notification_count = 0
+      AND (
+          LENGTH(recipients) > 0
+          OR LENGTH(other_addresses) > 0
+          OR LENGTH(subject) > 0
+          OR LENGTH(body) > 0
+      )
+    RETURNING 1
+),
+update_decomm_subject_bodies AS
+(
+    UPDATE notification n
+    SET
+        email_subject = CASE
+            WHEN COALESCE(n.email_subject, '') = '' THEN CASE WHEN LENGTH(decomm_config.subject) = 0 THEN 'Interface decommissioned' ELSE decomm_config.subject END
+            ELSE n.email_subject
+        END,
+        email_body = CASE
+            WHEN COALESCE(n.email_body, '') = '' THEN decomm_config.body
+            ELSE n.email_body
+        END
+    FROM decomm_config
+    CROSS JOIN decomm_notification_seed
+    WHERE n.notification_client = 'AppDecomm'
+      AND COALESCE(n.deadline, 'None') = 'None'
+      AND decomm_notification_seed.notification_count > 0
+    RETURNING 1
+)
+SELECT 1;

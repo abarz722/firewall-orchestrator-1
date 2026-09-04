@@ -1,231 +1,198 @@
--- migrate interface request notification text from legacy config to notification rows
-WITH request_config AS
-(
-    SELECT
-        MAX(CASE WHEN config_key = 'modReqEmailReceiver' THEN COALESCE(config_value, '') END) AS recipients,
-        MAX(CASE WHEN config_key = 'modReqEmailSubject' THEN COALESCE(config_value, '') END) AS subject,
-        MAX(CASE WHEN config_key = 'modReqEmailBody' THEN COALESCE(config_value, '') END) AS body,
-        MAX(CASE WHEN config_key = 'modUnansweredReqEmailBody' THEN COALESCE(config_value, '') END) AS reminder_body
-    FROM config
-    WHERE config_user = 0
-      AND config_key IN ('modReqEmailReceiver', 'modReqEmailSubject', 'modReqEmailBody', 'modUnansweredReqEmailBody')
-),
-initial_notification_seed AS
-(
-    SELECT COUNT(*) AS notification_count
-    FROM notification
-    WHERE notification_client = 'InterfaceRequest'
-      AND COALESCE(deadline, 'None') = 'None'
-),
-reminder_notification_seed AS
-(
-    SELECT COUNT(*) AS notification_count
-    FROM notification
-    WHERE notification_client = 'InterfaceRequest'
-      AND deadline = 'RequestDate'
-),
-insert_initial_notification AS
-(
-    INSERT INTO notification
-    (
-        notification_client,
-        name,
-        channel,
-        recipient_to,
-        email_address_to,
-        recipient_cc,
-        email_address_cc,
-        recipient_bcc,
-        email_address_bcc,
-        email_subject,
-        email_body,
-        layout,
-        deadline,
-        interval_before_deadline,
-        offset_before_deadline,
-        repeat_interval_after_deadline,
-        initial_offset_after_deadline,
-        repeat_offset_after_deadline,
-        repetitions_after_deadline
+-- issue #561: create new db schema network_zone
+
+create schema if not exists network_zone;
+
+-- move and rename the tables, guarded so the upgrade can be re-run safely
+DO $$
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN
+        SELECT * FROM (VALUES
+            ('network_zone',    'zone'),
+            ('ip_range',        'ip_range')
+        ) AS t(old_name, new_name)
+    LOOP
+        IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'compliance' AND tablename = r.old_name) THEN
+            EXECUTE format('ALTER TABLE compliance.%I SET SCHEMA network_zone', r.old_name);
+            IF r.old_name <> r.new_name THEN
+                EXECUTE format('ALTER TABLE network_zone.%I RENAME TO %I', r.old_name, r.new_name);
+            END IF;
+        END IF;
+    END LOOP;
+END $$;
+
+-- rename foreign keys
+DO $$
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN
+        SELECT * FROM (VALUES
+            ('compliance_ip_range_network_zone_foreign_key',    'network_zone_ip_range_zone_foreign_key', 'network_zone', 'ip_range'),
+            ('compliance_super_zone_foreign_key',    'network_zone_super_zone_foreign_key', 'network_zone', 'zone'),
+            ('compliance_from_network_zone_communication_foreign_key',    'network_zone_from_zone_communication_foreign_key', 'compliance', 'network_zone_communication'),
+            ('compliance_to_network_zone_communication_foreign_key',    'network_zone_to_zone_communication_foreign_key', 'compliance', 'network_zone_communication')
+        ) AS t(old_name, new_name, schema_name, table_name)
+    LOOP
+        IF EXISTS (
+            SELECT 1
+            FROM pg_constraint
+            WHERE conrelid = to_regclass(format('%I.%I', r.schema_name, r.table_name))
+            AND conname = r.old_name
+        )
+        AND NOT EXISTS (
+            SELECT 1
+            FROM pg_constraint
+            WHERE conrelid = to_regclass(format('%I.%I', r.schema_name, r.table_name))
+            AND conname = r.new_name
+        ) THEN
+            EXECUTE format('ALTER TABLE %I.%I RENAME CONSTRAINT %I TO %I',
+                r.schema_name,
+                r.table_name,
+                r.old_name,
+                r.new_name
+            );
+        END IF;
+    END LOOP;
+END $$;
+
+-- rename primary key
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'network_zone.zone'::regclass
+        AND conname = 'network_zone_pkey'
     )
-    SELECT
-        'InterfaceRequest',
-        'Interface requested',
-        'Email',
-        CASE
-            WHEN recipients = '' THEN 'None'
-            WHEN recipients LIKE '{%' THEN 'ConfiguredResponsibles'
-            ELSE 'OtherAddresses'
-        END,
-        recipients,
-        'None',
-        '',
-        'None',
-        '',
-        CASE
-            WHEN LENGTH(subject) = 0 THEN 'Interface requested'
-            ELSE subject
-        END,
-        body,
-        'SimpleText',
-        'None',
-        NULL,
-        NULL,
-        NULL,
-        NULL,
-        NULL,
-        NULL
-    FROM request_config
-    CROSS JOIN initial_notification_seed
-    WHERE notification_count = 0
-      AND recipients <> ''
-    RETURNING 1
-),
-update_initial_bodies AS
-(
-    UPDATE notification n
-    SET email_body = CASE
-        WHEN COALESCE(n.email_body, '') = '' THEN request_config.body
-        ELSE n.email_body
-    END
-    FROM request_config
-    CROSS JOIN initial_notification_seed
-    WHERE n.notification_client = 'InterfaceRequest'
-      AND COALESCE(n.deadline, 'None') = 'None'
-      AND initial_notification_seed.notification_count > 0
-    RETURNING 1
-),
-update_reminder_bodies AS
-(
-    UPDATE notification n
-    SET email_body = CASE
-        WHEN COALESCE(n.email_body, '') = '' THEN request_config.reminder_body
-        ELSE n.email_body
-    END
-    FROM request_config
-    CROSS JOIN reminder_notification_seed
-    WHERE n.notification_client = 'InterfaceRequest'
-      AND n.deadline = 'RequestDate'
-      AND reminder_notification_seed.notification_count > 0
-    RETURNING 1
-)
-SELECT 1;
+    AND NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'network_zone.zone'::regclass
+        AND conname = 'zone_pkey'
+    )
+    THEN ALTER TABLE network_zone.zone RENAME CONSTRAINT network_zone_pkey TO zone_pkey;
+    END IF;
+END $$;
 
-ALTER TABLE notification
-    ADD COLUMN IF NOT EXISTS logging Varchar NOT NULL DEFAULT 'send_only';
+-- rename sequence
+DO $$
+BEGIN
+    IF to_regclass('network_zone.network_zone_id_seq') IS NOT NULL
+    AND to_regclass('network_zone.zone_id_seq') IS NULL
+    THEN ALTER SEQUENCE network_zone.network_zone_id_seq RENAME TO zone_id_seq;
+    END IF;
+END $$;
 
-UPDATE notification
-SET logging = 'send_only'
-WHERE COALESCE(logging, '') = '';
+GRANT USAGE ON SCHEMA network_zone TO fwo_ro;
+GRANT SELECT ON ALL TABLES IN SCHEMA network_zone TO fwo_ro;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA network_zone TO fwo_ro;
+ALTER DEFAULT PRIVILEGES IN SCHEMA network_zone GRANT SELECT ON TABLES TO fwo_ro;
+ALTER DEFAULT PRIVILEGES IN SCHEMA network_zone GRANT USAGE, SELECT ON SEQUENCES TO fwo_ro;
 
-CREATE TABLE IF NOT EXISTS notification_log
+-- renamed config keys
+UPDATE config SET config_key = 'matrixAllowNestedZones'
+WHERE config_key = 'complianceMatrixAllowNetworkZones';
+UPDATE config SET config_key = 'sortMatrixByID'
+WHERE config_key = 'complianceCheckSortMatrixByID';
+
+-- renamed text ids
+UPDATE customtxt SET id = 'autoCalcInternetZone'
+WHERE id = 'complianceCheckAutoCalcInternetZone';
+UPDATE customtxt SET id = 'privateAdressSpace'
+WHERE id = 'complianceCheckPrivateAdressSpace';
+UPDATE customtxt SET id = 'documentationSamples'
+WHERE id = 'complianceCheckDocumentationSamples';
+UPDATE customtxt SET id = 'treatDynamicAndDomainObjectsAsInternet'
+WHERE id = 'complianceCheckTreatDynamicAndDomainObjectsAsInternet';
+UPDATE customtxt SET id = 'autoCalcUndefinedInternalZone'
+WHERE id = 'complianceCheckAutoCalcUndefinedInternalZone';
+UPDATE customtxt SET id = 'excludeFromInternetZone'
+WHERE id = 'complianceCheckExcludeFromInternetZone';
+UPDATE customtxt SET id = 'loopbackLocal'
+WHERE id = 'complianceCheckLoopbackLocal';
+UPDATE customtxt SET id = 'multicastBroadcast'
+WHERE id = 'complianceCheckMulticastBroadcast';
+UPDATE customtxt SET id = 'internetSettingsDiv'
+WHERE id = 'complianceCheckDiv';
+UPDATE customtxt SET id = 'autoCalculatedZonesAtTheEnd'
+WHERE id = 'complianceCheckAutoCalculatedZonesAtTheEnd';
+UPDATE customtxt SET id = 'matrixAllowNestedZones'
+WHERE id = 'complianceMatrixAllowNetworkZones';
+UPDATE customtxt SET id = 'sortMatrixByID'
+WHERE id = 'complianceCheckSortMatrixByID';
+
+-- path analysis algorithm
+CREATE TABLE IF NOT EXISTS "path_analysis_algorithm"
 (
-    "timestamp" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    notification_id INTEGER NOT NULL,
-    notification_type Varchar NOT NULL,
-    "to" Varchar NOT NULL DEFAULT '',
-    cc Varchar NOT NULL DEFAULT '',
-    bcc Varchar NOT NULL DEFAULT '',
-    subject Varchar NOT NULL DEFAULT ''
+    "id" BIGSERIAL PRIMARY KEY,
+    "name" varchar NOT NULL UNIQUE
 );
 
-WITH decomm_config AS
+INSERT INTO path_analysis_algorithm (id, name) VALUES
+    (1, 'None'),
+    (2, 'Network Zone Tree')
+ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO config (config_key, config_value, config_user)
+VALUES ('pathAnalysisAlgorithm', 1, 0)
+ON CONFLICT (config_key, config_user) DO NOTHING;
+
+GRANT SELECT ON TABLE path_analysis_algorithm TO fwo_ro;
+GRANT USAGE, SELECT ON SEQUENCE path_analysis_algorithm_id_seq TO fwo_ro;
+
+-- Network Zone Tree
+ALTER TABLE network_zone.ip_range
+ADD COLUMN IF NOT EXISTS id BIGSERIAL;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'network_zone.ip_range'::regclass
+          AND conname = 'ip_range_id_pkey'
+    ) THEN
+        ALTER TABLE network_zone.ip_range
+            DROP CONSTRAINT IF EXISTS ip_range_pkey;
+
+        ALTER TABLE network_zone.ip_range
+            ADD CONSTRAINT ip_range_id_pkey PRIMARY KEY (id);
+    END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS network_zone.device_ip_range_root
 (
-    SELECT
-        MAX(CASE WHEN config_key = 'modDecommEmailReceiver' THEN COALESCE(config_value, '') END) AS recipients,
-        MAX(CASE WHEN config_key = 'modDecommEmailOtherAddresses' THEN COALESCE(config_value, '') END) AS other_addresses,
-        MAX(CASE WHEN config_key = 'modDecommEmailSubject' THEN COALESCE(config_value, '') END) AS subject,
-        MAX(CASE WHEN config_key = 'modDecommEmailBody' THEN COALESCE(config_value, '') END) AS body
-    FROM config
-    WHERE config_user = 0
-      AND config_key IN ('modDecommEmailReceiver', 'modDecommEmailOtherAddresses', 'modDecommEmailSubject', 'modDecommEmailBody')
-),
-decomm_notification_seed AS
+    dev_id BIGINT NOT NULL,
+    ip_range_id BIGINT NOT NULL,
+    order_to_root BIGINT NOT NULL,
+    PRIMARY KEY (ip_range_id, dev_id)
+);
+
+CREATE TABLE IF NOT EXISTS network_zone.device_ip_range_internet
 (
-    SELECT COUNT(*) AS notification_count
-    FROM notification
-    WHERE notification_client = 'AppDecomm'
-      AND COALESCE(deadline, 'None') = 'None'
-),
-insert_decomm_notification AS
-(
-    INSERT INTO notification
-    (
-        notification_client,
-        name,
-        channel,
-        recipient_to,
-        email_address_to,
-        recipient_cc,
-        email_address_cc,
-        recipient_bcc,
-        email_address_bcc,
-        email_subject,
-        email_body,
-        layout,
-        deadline,
-        interval_before_deadline,
-        offset_before_deadline,
-        repeat_interval_after_deadline,
-        initial_offset_after_deadline,
-        repeat_offset_after_deadline,
-        repetitions_after_deadline
-    )
-    SELECT
-        'AppDecomm',
-        'Interface decommissioned',
-        'Email',
-        CASE
-            WHEN recipients = '' AND other_addresses <> '' THEN 'OtherAddresses'
-            WHEN recipients = '' THEN 'None'
-            ELSE recipients
-        END,
-        other_addresses,
-        'None',
-        '',
-        'None',
-        '',
-        CASE
-            WHEN LENGTH(subject) = 0 THEN 'Interface decommissioned'
-            ELSE subject
-        END,
-        body,
-        'SimpleText',
-        'None',
-        NULL,
-        NULL,
-        NULL,
-        NULL,
-        NULL,
-        NULL
-    FROM decomm_config
-    CROSS JOIN decomm_notification_seed
-    WHERE notification_count = 0
-      AND (
-          LENGTH(recipients) > 0
-          OR LENGTH(other_addresses) > 0
-          OR LENGTH(subject) > 0
-          OR LENGTH(body) > 0
-      )
-    RETURNING 1
-),
-update_decomm_subject_bodies AS
-(
-    UPDATE notification n
-    SET
-        email_subject = CASE
-            WHEN COALESCE(n.email_subject, '') = '' THEN CASE WHEN LENGTH(decomm_config.subject) = 0 THEN 'Interface decommissioned' ELSE decomm_config.subject END
-            ELSE n.email_subject
-        END,
-        email_body = CASE
-            WHEN COALESCE(n.email_body, '') = '' THEN decomm_config.body
-            ELSE n.email_body
-        END
-    FROM decomm_config
-    CROSS JOIN decomm_notification_seed
-    WHERE n.notification_client = 'AppDecomm'
-      AND COALESCE(n.deadline, 'None') = 'None'
-      AND decomm_notification_seed.notification_count > 0
-    RETURNING 1
-)
-SELECT 1;
+    dev_id BIGINT NOT NULL,
+    ip_range_id BIGINT NOT NULL,
+    order_to_internet BIGINT NOT NULL,
+    PRIMARY KEY (ip_range_id, dev_id)
+);
+
+ALTER TABLE network_zone.device_ip_range_root DROP CONSTRAINT IF EXISTS dev_id_device_ip_range_root;
+ALTER TABLE network_zone.device_ip_range_root DROP CONSTRAINT IF EXISTS ip_range_id_device_ip_range_root;
+ALTER TABLE network_zone.device_ip_range_internet DROP CONSTRAINT IF EXISTS dev_id_device_ip_range_internet;
+ALTER TABLE network_zone.device_ip_range_internet DROP CONSTRAINT IF EXISTS ip_range_id_device_ip_range_internet;
+ALTER TABLE network_zone.device_ip_range_root ADD CONSTRAINT dev_id_device_ip_range_root FOREIGN KEY (dev_id) REFERENCES device(dev_id) ON UPDATE RESTRICT ON DELETE CASCADE;
+ALTER TABLE network_zone.device_ip_range_root ADD CONSTRAINT ip_range_id_device_ip_range_root FOREIGN KEY (ip_range_id) REFERENCES network_zone.ip_range(id) ON UPDATE RESTRICT ON DELETE CASCADE;
+ALTER TABLE network_zone.device_ip_range_internet ADD CONSTRAINT dev_id_device_ip_range_internet FOREIGN KEY (dev_id) REFERENCES device(dev_id) ON UPDATE RESTRICT ON DELETE CASCADE;
+ALTER TABLE network_zone.device_ip_range_internet ADD CONSTRAINT ip_range_id_device_ip_range_internet FOREIGN KEY (ip_range_id) REFERENCES network_zone.ip_range(id) ON UPDATE RESTRICT ON DELETE CASCADE;
+
+CREATE INDEX IF NOT EXISTS idx_fkey_device_ip_range_root_dev_id
+ON network_zone.device_ip_range_root (dev_id);
+CREATE INDEX IF NOT EXISTS idx_fkey_device_ip_range_internet_dev_id
+ON network_zone.device_ip_range_internet (dev_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_order_to_root_per_ip_range
+ON network_zone.device_ip_range_root (ip_range_id, order_to_root);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_order_to_internet_per_ip_range
+ON network_zone.device_ip_range_internet (ip_range_id, order_to_internet);
