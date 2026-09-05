@@ -308,6 +308,16 @@ namespace FWO.Middleware.Server
                 return false;
             }
 
+            if (NotificationLoggingMode.ShouldLog(notification.Logging))
+            {
+                await NotificationLogHelper.InsertAsync(ApiConnection, notification, mail.To, mail.Cc, mail.Bcc, mail.Subject);
+            }
+
+            if (!NotificationLoggingMode.ShouldSend(notification.Logging))
+            {
+                return true;
+            }
+
             string decryptedSecret = AesEnc.TryDecrypt(GlobalConfig.EmailPassword, false, "NotificationService", "Could not decrypt mailserver password.");
             EmailConnection emailConnection = new(GlobalConfig.EmailServerAddress, GlobalConfig.EmailPort,
                 GlobalConfig.EmailTls, GlobalConfig.EmailUser, decryptedSecret, GlobalConfig.EmailSenderAddress);

@@ -9,7 +9,8 @@ namespace FWO.Services.Workflow
 {
     public partial class ActionHandler
     {
-        public async Task SendEmail(WfStateAction action, WfStatefulObject statefulObject, WfObjectScopes scope, FwoOwner? owner, string? userGrpDn = null)
+        public async Task SendEmail(WfStateAction action, WfStatefulObject statefulObject, WfObjectScopes scope, FwoOwner? owner, string? userGrpDn = null,
+            NotificationPlaceholderData? placeholderData = null)
         {
             Log.WriteDebug("SendEmail", "Perform Action");
             EmailActionParams? emailActionParams = null;
@@ -27,7 +28,7 @@ namespace FWO.Services.Workflow
                     await emailHelper.Init(ScopedUserTo, ScopedUserCc, ScopedUserBcc, ScopedUserEmailTo, ScopedUserEmailCc, ScopedUserEmailBcc);
                     WfStatefulObject placeholderObject = WorkflowPlaceholderObject(statefulObject);
                     if (await emailHelper.SendWorkflowActionEmail(actionNotification, statefulObject, owner, userGrpDn, workflowContent, placeholderObject,
-                        statefulObject.NotificationPlaceholders))
+                        placeholderData))
                     {
                         ++sentEmailCount;
                         if (actionNotification.Id > 0)

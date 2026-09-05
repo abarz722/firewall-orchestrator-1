@@ -1,4 +1,5 @@
 using FWO.Basics;
+using FWO.Data;
 using FWO.Data.Workflow;
 using FWO.Logging;
 
@@ -88,7 +89,7 @@ namespace FWO.Services.Workflow
             }
         }
 
-        public async Task PromoteImplTask(WfStatefulObject implTask)
+        public async Task PromoteImplTask(WfStatefulObject implTask, NotificationPlaceholderData? placeholderData = null)
         {
             try
             {
@@ -98,7 +99,7 @@ namespace FWO.Services.Workflow
                 {
                     ActImplTask.Stop = DateTime.Now;
                 }
-                await UpdateActImplTaskState();
+                await UpdateActImplTaskState(placeholderData: placeholderData);
                 ResetImplTaskList();
                 await UpdateReqTaskStatesFromActImplTask();
                 await UpdateActTicketStateFromReqTasks();
@@ -459,12 +460,12 @@ namespace FWO.Services.Workflow
                 : [.. ActTicket.Tasks.Where(task => task.GetAddInfoValue(AdditionalInfoKeys.FlowBundleId) == bundleId)];
         }
 
-        private async Task UpdateActImplTaskState(bool triggerActions = true)
+        private async Task UpdateActImplTaskState(bool triggerActions = true, NotificationPlaceholderData? placeholderData = null)
         {
             if (dbAcc != null)
             {
                 AuditUnexpectedStateTransition(ActImplTask, WfObjectScopes.ImplementationTask, ActStateMatrix);
-                await dbAcc.UpdateImplTaskStateInDb(ActImplTask, triggerActions);
+                await dbAcc.UpdateImplTaskStateInDb(ActImplTask, triggerActions, placeholderData);
             }
             int index = ActReqTask.ImplementationTasks.FindIndex(x => x.Id == ActImplTask.Id);
             if (index >= 0)

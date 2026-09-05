@@ -1,6 +1,5 @@
 using FWO.Basics;
 using FWO.Data;
-using FWO.Logging;
 
 namespace FWO.Services
 {
@@ -24,7 +23,7 @@ namespace FWO.Services
             }
 
             DateTime deadline = GetDeadlineDate(notification.Deadline, owner, extDeadline);
-            return deadline.Date >= DateTime.Now.Date
+            return deadline >= DateTime.Now
                 ? IsNotificationDueBeforeDeadline(deadline, notification)
                 : IsNotificationDueAfterDeadline(deadline, notification);
         }
@@ -42,7 +41,8 @@ namespace FWO.Services
                 return true;
             }
 
-            Log.WriteWarning("Notifications", $"Notification interval '{propertyName}' is not configured. Skipping due evaluation.");
+            // Before- and after-deadline schedules are optional. An unset interval
+            // disables only the corresponding phase; it is not an error.
             configuredInterval = default;
             return false;
         }

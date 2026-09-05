@@ -461,7 +461,7 @@ namespace FWO.Services.Workflow
             return !string.IsNullOrWhiteSpace(ticket.Requester?.Dn) ? ticket.Requester.Dn : ticket.RequesterDn;
         }
 
-        public async Task UpdateImplTaskStateInDb(WfImplTask impltask, bool triggerActions = true)
+        public async Task UpdateImplTaskStateInDb(WfImplTask impltask, bool triggerActions = true, NotificationPlaceholderData? placeholderData = null)
         {
             try
             {
@@ -484,7 +484,7 @@ namespace FWO.Services.Workflow
                 {
                     if (triggerActions)
                     {
-                        await ActionHandler.DoStateChangeActions(impltask, WfObjectScopes.ImplementationTask);
+                        await ActionHandler.DoStateChangeActions(impltask, WfObjectScopes.ImplementationTask, placeholderData: placeholderData);
                     }
                 }
             }

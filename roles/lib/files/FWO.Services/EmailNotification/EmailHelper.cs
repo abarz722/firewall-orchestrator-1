@@ -91,14 +91,7 @@ namespace FWO.Services
             List<string>? bccs = notification.RecipientBcc == EmailRecipientOption.None
                 ? null
                 : await GetNotificationRecipients(notification.RecipientBcc, notification.EmailAddressBcc, owner);
-            if (NotificationLoggingMode.ShouldLog(notification.Logging))
-            {
-                List<string> loggedTos = [.. tos];
-                List<string>? loggedCcs = ccs == null ? null : [.. ccs];
-                List<string>? loggedBccs = bccs == null ? null : [.. bccs];
-                ApplyDummyRecipientOverride(ref loggedTos, ref loggedCcs, ref loggedBccs);
-                await InsertNotificationLog(notification, loggedTos, loggedCcs, loggedBccs, subject);
-            }
+            await LogNotificationIfConfigured(notification, tos, ccs, bccs, subject);
 
             if (!NotificationLoggingMode.ShouldSend(notification.Logging))
             {
@@ -127,8 +120,28 @@ namespace FWO.Services
             string body = NotificationPlaceholderResolver.ReplaceWorkflowPlaceholders(NotificationEmailLayoutHelper.BuildBody(notification, workflowContent), placeholderContext, owner,
                 placeholderData, renderHtmlLinks: true);
             FormFile? attachment = await NotificationEmailLayoutHelper.BuildAttachment(notification.Layout, workflowContent, subject);
+            await LogNotificationIfConfigured(notification, tos, ccs, bccs, subject);
+            if (!NotificationLoggingMode.ShouldSend(notification.Logging))
+            {
+                return true;
+            }
             return await SendEmail(tos, subject, body, ccs, bccs,
                 notification.Layout == NotificationLayout.HtmlInBody, attachment);
+        }
+
+        private async Task LogNotificationIfConfigured(FwoNotification notification, List<string> tos, List<string>? ccs,
+            List<string>? bccs, string subject)
+        {
+            if (!NotificationLoggingMode.ShouldLog(notification.Logging))
+            {
+                return;
+            }
+
+            List<string> loggedTos = [.. tos];
+            List<string>? loggedCcs = ccs == null ? null : [.. ccs];
+            List<string>? loggedBccs = bccs == null ? null : [.. bccs];
+            ApplyDummyRecipientOverride(ref loggedTos, ref loggedCcs, ref loggedBccs);
+            await NotificationLogHelper.InsertAsync(apiConnection, notification, loggedTos, loggedCcs, loggedBccs, subject);
         }
 
         private async Task<List<string>> GetWorkflowActionRecipients(
@@ -184,22 +197,6 @@ namespace FWO.Services
                 Log.WriteWarning("SendEmail", $"MailKit returned false while sending workflow email. To recipients: {tos.Count}, subject: '{subject}'.");
             }
             return sent;
-        }
-
-        private async Task InsertNotificationLog(FwoNotification notification, List<string> tos, List<string>? ccs, List<string>? bccs, string subject)
-        {
-            NotificationLogEntry entry = new()
-            {
-                Timestamp = DateTimeOffset.UtcNow,
-                NotificationId = notification.Id,
-                NotificationType = notification.NotificationClient.ToString(),
-                To = string.Join(", ", tos),
-                Cc = string.Join(", ", ccs ?? []),
-                Bcc = string.Join(", ", bccs ?? []),
-                Subject = subject
-            };
-
-            await apiConnection.SendQueryAsync<object>(NotificationQueries.insertNotificationLog, new { entries = new List<NotificationLogEntry> { entry } });
         }
 
         public async Task<List<string>> GetRecipients(EmailRecipientOption recipientOption, WfStatefulObject? statefulObject, FwoOwner? owner, string? scopedUser,

@@ -181,12 +181,11 @@ namespace FWO.Services.Workflow
             foreach (WfImplTask implTask in implTasks)
             {
                 await wfHandler.ContinueImplPhase(implTask);
-                wfHandler.ActImplTask.NotificationPlaceholders = placeholderData;
                 if (comment != "")
                 {
                     await wfHandler.ConfAddCommentToImplTask(comment);
                 }
-                await wfHandler.PromoteImplTask(new() { StateId = (int)newState });
+                await wfHandler.PromoteImplTask(new() { StateId = (int)newState }, placeholderData);
                 promotedCount++;
             }
             return promotedCount;

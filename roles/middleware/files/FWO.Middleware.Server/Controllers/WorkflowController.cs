@@ -181,8 +181,6 @@ namespace FWO.Middleware.Server.Controllers
                 return result;
             }
 
-            statefulObject.NotificationPlaceholders = parameters.NotificationPlaceholders;
-
             if (!await CallerCanAccessVisibility(User, wfHandler, scope, statefulObject))
             {
                 SetWarning(result, $"User is not authorized to access workflow visibility for scope '{scope}' and state {statefulObject.StateId}.");
@@ -350,11 +348,12 @@ namespace FWO.Middleware.Server.Controllers
         {
             if (parameters.ActionId > 0)
             {
-                return await wfHandler.ActionHandler!.PerformActionById(parameters.ActionId, statefulObject, scope, owner, actionTicketId, userGrpDn);
+                return await wfHandler.ActionHandler!.PerformActionById(parameters.ActionId, statefulObject, scope, owner, actionTicketId, userGrpDn,
+                    parameters.NotificationPlaceholders);
             }
 
             MarkStateChanged(statefulObject, parameters.OldStateId, parameters.NewStateId);
-            await wfHandler.ActionHandler!.DoStateChangeActions(statefulObject, scope, owner, actionTicketId, userGrpDn);
+            await wfHandler.ActionHandler!.DoStateChangeActions(statefulObject, scope, owner, actionTicketId, userGrpDn, parameters.NotificationPlaceholders);
             return true;
         }
 
