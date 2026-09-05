@@ -1063,7 +1063,7 @@ namespace FWO.Test
             ticket.MarkCreatedStateChanged(1);
 
             WorkflowActionParameters parameters = (WorkflowActionParameters)GetPrivateMethod("BuildWorkflowActionParameters")
-                .Invoke(handler, [ticket, WfObjectScopes.Ticket, null, 0])!;
+                .Invoke(handler, [ticket, WfObjectScopes.Ticket, null, 0, null])!;
 
             Assert.Multiple(() =>
             {
@@ -1083,13 +1083,13 @@ namespace FWO.Test
             WfApproval approval = new() { Id = 13, StateId = 4 };
 
             WorkflowActionParameters reqParams = (WorkflowActionParameters)GetPrivateMethod("BuildWorkflowActionParameters")
-                .Invoke(handler, [reqTask, WfObjectScopes.RequestTask, null, 5])!;
+                .Invoke(handler, [reqTask, WfObjectScopes.RequestTask, null, 5, null])!;
             WorkflowActionParameters implParams = (WorkflowActionParameters)GetPrivateMethod("BuildWorkflowActionParameters")
-                .Invoke(handler, [implTask, WfObjectScopes.ImplementationTask, null, 6])!;
+                .Invoke(handler, [implTask, WfObjectScopes.ImplementationTask, null, 6, null])!;
             WorkflowActionParameters approvalParams = (WorkflowActionParameters)GetPrivateMethod("BuildWorkflowActionParameters")
-                .Invoke(handler, [approval, WfObjectScopes.Approval, null, 7])!;
+                .Invoke(handler, [approval, WfObjectScopes.Approval, null, 7, null])!;
             WorkflowActionParameters explicitTicketParams = (WorkflowActionParameters)GetPrivateMethod("BuildWorkflowActionParameters")
-                .Invoke(handler, [reqTask, WfObjectScopes.RequestTask, 999L, 8])!;
+                .Invoke(handler, [reqTask, WfObjectScopes.RequestTask, 999L, 8, null])!;
 
             Assert.Multiple(() =>
             {

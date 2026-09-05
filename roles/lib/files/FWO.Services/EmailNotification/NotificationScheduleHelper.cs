@@ -22,8 +22,15 @@ namespace FWO.Services
                 return true;
             }
 
+            if (notification.Deadline == NotificationDeadline.RequestDate
+                && extDeadline?.Date == DateTime.Now.Date
+                && notification.OffsetBeforeDeadline == 0)
+            {
+                return notification.LastSent == null || notification.LastSent.Value.Date < DateTime.Now.Date;
+            }
+
             DateTime deadline = GetDeadlineDate(notification.Deadline, owner, extDeadline);
-            return deadline >= DateTime.Now
+            return deadline.Date >= DateTime.Now.Date
                 ? IsNotificationDueBeforeDeadline(deadline, notification)
                 : IsNotificationDueAfterDeadline(deadline, notification);
         }
