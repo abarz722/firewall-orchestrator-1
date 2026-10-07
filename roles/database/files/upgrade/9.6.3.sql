@@ -1,0 +1,4 @@
+-- Add the default implicit approval comment setting for existing installations.
+INSERT INTO config (config_key, config_value, config_user)
+VALUES ('reqImplicitApprovalComment', 'Automatically approved because the request task was promoted beyond the approval phase.', 0)
+ON CONFLICT (config_key, config_user) DO NOTHING;

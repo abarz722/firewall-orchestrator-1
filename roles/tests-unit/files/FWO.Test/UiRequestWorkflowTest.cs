@@ -643,6 +643,7 @@ namespace FWO.Test
             public List<FlowNwObject> FlowNwObjects { get; set; } = [];
             public List<FlowSvcObject> FlowSvcObjects { get; set; } = [];
             public List<FlowTimeObject> FlowTimeObjects { get; set; } = [];
+            public List<Management> Managements { get; set; } = [];
 
             public override Task<QueryResponseType> SendQueryAsync<QueryResponseType>(string query, object? variables = null, string? operationName = null, FWO.Api.Client.QueryChunkingOptions? chunkingOptions = null)
             {
@@ -661,7 +662,7 @@ namespace FWO.Test
                 }
                 if (query == DeviceQueries.getManagementNames)
                 {
-                    return Task.FromResult((QueryResponseType)(object)new List<Management>());
+                    return Task.FromResult((QueryResponseType)(object)Managements);
                 }
                 if (query == FlowQueries.getFlowRequestNwObjectCatalog)
                 {
