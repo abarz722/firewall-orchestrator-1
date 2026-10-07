@@ -636,6 +636,7 @@ namespace FWO.Middleware.Server.Controllers
         internal static void ApplyCallerIdentity(ClaimsPrincipal user, UserConfig userConfig, WfHandler wfHandler)
         {
             userConfig.User.Name = user.FindFirstValue("unique_name") ?? "";
+            userConfig.User.Dn = user.FindFirstValue("x-hasura-uuid") ?? "";
             wfHandler.ChangerId = GetClaimInt(user, "x-hasura-user-id");
         }
 

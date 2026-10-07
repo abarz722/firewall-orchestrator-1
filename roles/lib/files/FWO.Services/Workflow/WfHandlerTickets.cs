@@ -127,8 +127,20 @@ namespace FWO.Services.Workflow
             {
                 if (dbAcc != null)
                 {
-                    ActTicket.StateId = ticket.StateId;
+                    int previousTicketStateId = ActTicket.StateId;
+                    int targetTicketStateId = ticket.StateId;
+                    ActTicket.StateId = targetTicketStateId;
                     PrepareTicketData();
+                    bool requestTasksSynchronized = !AddTicketMode
+                        && Phase != WorkflowPhases.request
+                        && previousTicketStateId != ActTicket.StateId;
+
+                    if (requestTasksSynchronized)
+                    {
+                        await UpdateRequestTasksFromTicket(false, targetTicketStateId: targetTicketStateId,
+                            approvalComment: ticket.OptComment());
+                        ActTicket.StateId = targetTicketStateId;
+                    }
 
                     if (AddTicketMode)
                     {
@@ -150,13 +162,16 @@ namespace FWO.Services.Workflow
                         TicketList[TicketList.FindIndex(x => x.Id == ActTicket.Id)] = ActTicket;
                     }
 
-                    // update of request tasks and creation of impl tasks may be necessary
-                    bool requestTaskActionsChangedState = await UpdateRequestTasksFromTicket();
-
-                    if (requestTaskActionsChangedState)
+                    if (!requestTasksSynchronized)
                     {
-                        // check for further promotion (req tasks may be promoted)
-                        await UpdateActTicketStateFromReqTasks();
+                        // update of request tasks and creation of impl tasks may be necessary
+                        bool requestTaskActionsChangedState = await UpdateRequestTasksFromTicket(
+                            approvalComment: ticket.OptComment());
+
+                        if (requestTaskActionsChangedState && Phase != WorkflowPhases.request)
+                        {
+                            await UpdateActTicketStateFromReqTasks();
+                        }
                     }
 
                     ResetTicketActions();
@@ -352,11 +367,17 @@ namespace FWO.Services.Workflow
             {
                 DisplayMessageInUi(null, userConfig.GetText("save_request"), userConfig.GetText("U0001"), true);
             }
-            foreach (WfReqTask reqTask in ActTicket.Tasks)
+            // For an existing ticket, request-task promotion is handled by
+            // UpdateRequestTasksFromTicket(), which must compare and persist
+            // the actual task state. Do not overwrite that baseline here.
+            if (AddTicketMode)
             {
-                if (reqTask.StateId < ActTicket.StateId)
+                foreach (WfReqTask reqTask in ActTicket.Tasks)
                 {
-                    reqTask.StateId = ActTicket.StateId;
+                    if (reqTask.StateId < ActTicket.StateId)
+                    {
+                        reqTask.StateId = ActTicket.StateId;
+                    }
                 }
             }
 

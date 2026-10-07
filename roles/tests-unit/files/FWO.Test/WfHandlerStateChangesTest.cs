@@ -542,7 +542,8 @@ namespace FWO.Test
             {
                 LowestInputState = 0,
                 LowestStartedState = 2,
-                LowestEndState = 5
+                LowestEndState = 5,
+                ApprovalLowestEndState = 5
             };
             SetMatrix(handler, WfTaskType.access.ToString(), matrix);
             handler.MasterStateMatrix = new StateMatrix
@@ -570,6 +571,52 @@ namespace FWO.Test
         }
 
         [Test]
+        public async Task PromoteTasksAndTicket_AttachesCommentToImplicitApproval()
+        {
+            WfHandler handler = new();
+            StateMatrix matrix = new()
+            {
+                LowestInputState = 0,
+                LowestStartedState = 2,
+                LowestEndState = 5,
+                ApprovalLowestEndState = 5,
+                PhaseActive = new()
+                {
+                    { WorkflowPhases.approval, true },
+                    { WorkflowPhases.planning, false }
+                },
+                MinImplTasksNeeded = 99
+            };
+            SetMatrix(handler, WfTaskType.access.ToString(), matrix);
+            handler.MasterStateMatrix = new StateMatrix
+            {
+                LowestEndState = 99,
+                MinTicketCompleted = 299
+            };
+            WfApproval approval = new() { Id = 1, TaskId = 7, StateId = 1 };
+            WfReqTask reqTask = new()
+            {
+                Id = 7,
+                TicketId = 1,
+                TaskType = WfTaskType.access.ToString(),
+                StateId = 1,
+                Approvals = { approval }
+            };
+            WfTicket ticket = new() { Id = 1, StateId = 6, Tasks = { reqTask } };
+            ticket.SetOptComment("Approved by security review");
+            handler.ActTicket = ticket;
+
+            await handler.PromoteTasksAndTicket(ticket);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(approval.StateId, Is.EqualTo(5));
+                Assert.That(approval.Comments, Has.Count.EqualTo(1));
+                Assert.That(approval.Comments[0].Comment.CommentText, Is.EqualTo("Approved by security review"));
+            });
+        }
+
+        [Test]
         public async Task UpdateRequestTasksFromTicket_UpdatesApprovalStatesFromReqTask()
         {
             WfHandler handler = new();
@@ -579,7 +626,11 @@ namespace FWO.Test
                 LowestStartedState = 2,
                 LowestEndState = 5,
                 ApprovalLowestEndState = 5,
-                PhaseActive = new() { { WorkflowPhases.planning, false } },
+                PhaseActive = new()
+                {
+                    { WorkflowPhases.approval, true },
+                    { WorkflowPhases.planning, false }
+                },
                 MinImplTasksNeeded = 99
             };
             SetMatrix(handler, WfTaskType.access.ToString(), matrix);
@@ -599,7 +650,7 @@ namespace FWO.Test
             handler.ActTicket.Tasks.Add(reqTask);
 
             MethodInfo? method = typeof(WfHandler).GetMethod("UpdateRequestTasksFromTicket", BindingFlags.NonPublic | BindingFlags.Instance);
-            await (Task)(method?.Invoke(handler, [false, true]) ?? throw new InvalidOperationException("Method not found."));
+            await (Task)(method?.Invoke(handler, [false, true, null, null]) ?? throw new InvalidOperationException("Method not found."));
 
             Assert.That(reqTask.StateId, Is.EqualTo(4));
             Assert.That(reqTask.Approvals[0].StateId, Is.EqualTo(4));
@@ -616,7 +667,11 @@ namespace FWO.Test
                 LowestStartedState = 2,
                 LowestEndState = 5,
                 ApprovalLowestEndState = 5,
-                PhaseActive = new() { { WorkflowPhases.planning, false } },
+                PhaseActive = new()
+                {
+                    { WorkflowPhases.approval, true },
+                    { WorkflowPhases.planning, false }
+                },
                 MinImplTasksNeeded = 99
             };
             SetMatrix(handler, WfTaskType.access.ToString(), matrix);
@@ -637,15 +692,15 @@ namespace FWO.Test
             handler.ActTicket.Tasks.Add(reqTask);
 
             MethodInfo? method = typeof(WfHandler).GetMethod("UpdateRequestTasksFromTicket", BindingFlags.NonPublic | BindingFlags.Instance);
-            await (Task)(method?.Invoke(handler, [false, true]) ?? throw new InvalidOperationException("Method not found."));
+            await (Task)(method?.Invoke(handler, [false, true, null, null]) ?? throw new InvalidOperationException("Method not found."));
 
             Assert.That(reqTask.StateId, Is.EqualTo(6));
-            Assert.That(reqTask.Approvals[0].StateId, Is.EqualTo(6));
+            Assert.That(reqTask.Approvals[0].StateId, Is.EqualTo(5));
             Assert.That(reqTask.Approvals[1].StateId, Is.EqualTo(5));
         }
 
         [Test]
-        public async Task UpdateRequestTasksFromTicket_DowngradesRequestTaskAndReturnsFalse()
+        public async Task UpdateRequestTasksFromTicket_DoesNotDowngradeRequestTaskAndReturnsFalse()
         {
             WfHandler handler = new();
             StateMatrix matrix = new()
@@ -673,11 +728,123 @@ namespace FWO.Test
             handler.ActTicket.Tasks.Add(reqTask);
 
             MethodInfo? method = typeof(WfHandler).GetMethod("UpdateRequestTasksFromTicket", BindingFlags.NonPublic | BindingFlags.Instance);
-            bool requestTaskActionsChangedState = await (Task<bool>)(method?.Invoke(handler, [false, true]) ?? throw new InvalidOperationException("Method not found."));
+            bool requestTaskActionsChangedState = await (Task<bool>)(method?.Invoke(handler, [false, true, null, null]) ?? throw new InvalidOperationException("Method not found."));
 
-            Assert.That(reqTask.StateId, Is.EqualTo(1));
-            Assert.That(reqTask.Approvals[0].StateId, Is.EqualTo(1));
+            Assert.That(reqTask.StateId, Is.EqualTo(4));
+            Assert.That(reqTask.Approvals[0].StateId, Is.EqualTo(4));
             Assert.That(requestTaskActionsChangedState, Is.False);
+        }
+
+        [Test]
+        public async Task UpdateRequestTasksFromTicket_ApprovesLowerTaskAndSetsApprovalMetadata()
+        {
+            WfHandler handler = new()
+            {
+                userConfig = new SimulatedUserConfig()
+            };
+            handler.userConfig.User.Dn = "uid=approver,dc=example";
+            StateMatrix matrix = new()
+            {
+                LowestInputState = 0,
+                LowestStartedState = 2,
+                LowestEndState = 5,
+                ApprovalLowestEndState = 5,
+                PhaseActive = new()
+                {
+                    { WorkflowPhases.approval, true },
+                    { WorkflowPhases.planning, false }
+                },
+                MinImplTasksNeeded = 99
+            };
+            SetMatrix(handler, WfTaskType.access.ToString(), matrix);
+            handler.ActTicket = new WfTicket { Id = 1, StateId = 6 };
+            WfReqTask reqTask = new()
+            {
+                Id = 7,
+                TicketId = 1,
+                TaskType = WfTaskType.access.ToString(),
+                StateId = 1,
+                Approvals =
+                {
+                    new WfApproval { Id = 1, TaskId = 7, StateId = 1 },
+                    new WfApproval { Id = 2, TaskId = 7, StateId = 6 }
+                }
+            };
+            handler.ActTicket.Tasks.Add(reqTask);
+
+            MethodInfo? method = typeof(WfHandler).GetMethod("UpdateRequestTasksFromTicket", BindingFlags.NonPublic | BindingFlags.Instance);
+            await (Task)(method?.Invoke(handler, [false, true, null, null]) ?? throw new InvalidOperationException("Method not found."));
+
+            Assert.That(reqTask.StateId, Is.EqualTo(6));
+            Assert.That(reqTask.Approvals[0].StateId, Is.EqualTo(5));
+            Assert.That(reqTask.Approvals[0].ApprovalDate, Is.Not.Null);
+            Assert.That(reqTask.Approvals[0].ApproverDn, Is.EqualTo("system"));
+            Assert.That(reqTask.Approvals[1].StateId, Is.EqualTo(6));
+        }
+
+        [Test]
+        public async Task UpdateRequestTasksFromTicket_SynchronizesMultipleTaskApprovalsIndependently()
+        {
+            WfHandler handler = new()
+            {
+                userConfig = new SimulatedUserConfig()
+            };
+            StateMatrix matrix = new()
+            {
+                LowestInputState = 0,
+                LowestStartedState = 2,
+                LowestEndState = 5,
+                ApprovalLowestEndState = 5,
+                PhaseActive = new()
+                {
+                    { WorkflowPhases.approval, true },
+                    { WorkflowPhases.planning, false }
+                },
+                MinImplTasksNeeded = 99
+            };
+            SetMatrix(handler, WfTaskType.access.ToString(), matrix);
+            handler.ActTicket = new WfTicket { Id = 1, StateId = 6 };
+
+            WfReqTask firstTask = new()
+            {
+                Id = 7,
+                TicketId = 1,
+                TaskType = WfTaskType.access.ToString(),
+                StateId = 1,
+                Approvals =
+                {
+                    new WfApproval { Id = 1, TaskId = 7, StateId = 1 },
+                    new WfApproval { Id = 2, TaskId = 7, StateId = 6 }
+                }
+            };
+            WfReqTask secondTask = new()
+            {
+                Id = 8,
+                TicketId = 1,
+                TaskType = WfTaskType.access.ToString(),
+                StateId = 4,
+                Approvals =
+                {
+                    new WfApproval { Id = 3, TaskId = 8, StateId = 4 },
+                    new WfApproval { Id = 4, TaskId = 8, StateId = 5 }
+                }
+            };
+            handler.ActTicket.Tasks.Add(firstTask);
+            handler.ActTicket.Tasks.Add(secondTask);
+
+            MethodInfo? method = typeof(WfHandler).GetMethod("UpdateRequestTasksFromTicket", BindingFlags.NonPublic | BindingFlags.Instance);
+            await (Task)(method?.Invoke(handler, [false, true, null, null]) ?? throw new InvalidOperationException("Method not found."));
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(firstTask.StateId, Is.EqualTo(6));
+                Assert.That(firstTask.Approvals[0].StateId, Is.EqualTo(5));
+                Assert.That(firstTask.Approvals[0].ApproverDn, Is.EqualTo("system"));
+                Assert.That(firstTask.Approvals[1].StateId, Is.EqualTo(6));
+                Assert.That(secondTask.StateId, Is.EqualTo(6));
+                Assert.That(secondTask.Approvals[0].StateId, Is.EqualTo(5));
+                Assert.That(secondTask.Approvals[1].StateId, Is.EqualTo(5));
+            });
         }
 
         [Test]
@@ -710,7 +877,7 @@ namespace FWO.Test
             handler.ActTicket.Tasks.Add(reqTask);
 
             MethodInfo? method = typeof(WfHandler).GetMethod("UpdateRequestTasksFromTicket", BindingFlags.NonPublic | BindingFlags.Instance);
-            await (Task)(method?.Invoke(handler, [true, true]) ?? throw new InvalidOperationException("Method not found."));
+            await (Task)(method?.Invoke(handler, [true, true, null, null]) ?? throw new InvalidOperationException("Method not found."));
 
             Assert.Multiple(() =>
             {
@@ -749,7 +916,7 @@ namespace FWO.Test
             handler.ActTicket.Tasks.Add(reqTask);
 
             MethodInfo? method = typeof(WfHandler).GetMethod("UpdateRequestTasksFromTicket", BindingFlags.NonPublic | BindingFlags.Instance);
-            await (Task)(method?.Invoke(handler, [true, true]) ?? throw new InvalidOperationException("Method not found."));
+            await (Task)(method?.Invoke(handler, [true, true, null, null]) ?? throw new InvalidOperationException("Method not found."));
 
             Assert.Multiple(() =>
             {
@@ -790,6 +957,73 @@ namespace FWO.Test
             await (Task)(method?.Invoke(handler, [true, true, null]) ?? throw new InvalidOperationException("Method not found."));
 
             Assert.That(handler.ActTicket.StateId, Is.EqualTo(1));
+        }
+
+        [Test]
+        public async Task UpdateActTicketStateFromReqTasks_DoesNotDowngradeForMixedTaskPhases()
+        {
+            WfHandler handler = new();
+            handler.MasterStateMatrix = new StateMatrix
+            {
+                LowestInputState = 0,
+                LowestStartedState = 1,
+                LowestEndState = 100,
+                MinTicketCompleted = 299,
+                PhaseActive = new() { { WorkflowPhases.planning, false } }
+            };
+            handler.ActTicket = new WfTicket
+            {
+                Id = 1,
+                StateId = 49,
+                Tasks =
+                {
+                    new WfReqTask { Id = 7, TaskType = WfTaskType.access.ToString(), StateId = 100 },
+                    new WfReqTask { Id = 8, TaskType = WfTaskType.access.ToString(), StateId = 0 }
+                }
+            };
+
+            MethodInfo? method = typeof(WfHandler).GetMethod("UpdateActTicketStateFromReqTasks", BindingFlags.NonPublic | BindingFlags.Instance);
+            await (Task)(method?.Invoke(handler, [true, true, null]) ?? throw new InvalidOperationException("Method not found."));
+
+            Assert.That(handler.ActTicket.StateId, Is.EqualTo(49));
+
+            handler.ActTicket.Tasks[1].StateId = 100;
+            await (Task)(method?.Invoke(handler, [true, true, null]) ?? throw new InvalidOperationException("Method not found."));
+
+            Assert.That(handler.ActTicket.StateId, Is.EqualTo(100));
+        }
+
+        [Test]
+        public async Task UpdateActTicketStateFromReqTasks_UsesPersistedTaskStates()
+        {
+            WfHandler handler = new();
+            handler.MasterStateMatrix = new StateMatrix
+            {
+                LowestInputState = 0,
+                LowestStartedState = 1,
+                LowestEndState = 100,
+                MinTicketCompleted = 299,
+                PhaseActive = new() { { WorkflowPhases.planning, false } }
+            };
+            WfReqTask firstTask = new() { Id = 7, TicketId = 1, TaskType = WfTaskType.access.ToString(), StateId = 100 };
+            WfReqTask secondTask = new() { Id = 8, TicketId = 1, TaskType = WfTaskType.access.ToString(), StateId = 0 };
+            handler.ActTicket = new WfTicket { Id = 1, StateId = 49, Tasks = { firstTask, secondTask } };
+            WfTicket persistedTicket = new()
+            {
+                Id = 1,
+                StateId = 49,
+                Tasks =
+                {
+                    new WfReqTask { Id = 7, TicketId = 1, TaskType = WfTaskType.access.ToString(), StateId = 100 },
+                    new WfReqTask { Id = 8, TicketId = 1, TaskType = WfTaskType.access.ToString(), StateId = 100 }
+                }
+            };
+            SetDbAccess(handler, new PersistedTicketStateApiConn(persistedTicket));
+
+            MethodInfo? method = typeof(WfHandler).GetMethod("UpdateActTicketStateFromReqTasks", BindingFlags.NonPublic | BindingFlags.Instance);
+            await (Task)(method?.Invoke(handler, [true, false, null]) ?? throw new InvalidOperationException("Method not found."));
+
+            Assert.That(handler.ActTicket.StateId, Is.EqualTo(100));
         }
 
         [Test]
@@ -940,6 +1174,24 @@ namespace FWO.Test
             public override Task<T> SendQueryAsync<T>(string query, object? variables = null, string? operationName = null, QueryChunkingOptions? chunkingOptions = null)
             {
                 if (query == RequestQueries.updateTicketState || query == RequestQueries.updateRequestTaskState)
+                {
+                    long id = Convert.ToInt64(variables?.GetType().GetProperty("id")?.GetValue(variables));
+                    return Task.FromResult((T)(object)new ReturnId { UpdatedIdLong = id });
+                }
+
+                throw new AssertionException($"Unexpected query: {query}");
+            }
+        }
+
+        private sealed class PersistedTicketStateApiConn(WfTicket persistedTicket) : SimulatedApiConnection
+        {
+            public override Task<T> SendQueryAsync<T>(string query, object? variables = null, string? operationName = null, QueryChunkingOptions? chunkingOptions = null)
+            {
+                if (query == RequestQueries.getTicketById && typeof(T) == typeof(WfTicket))
+                {
+                    return Task.FromResult((T)(object)persistedTicket);
+                }
+                if (query == RequestQueries.updateTicketState && typeof(T) == typeof(ReturnId))
                 {
                     long id = Convert.ToInt64(variables?.GetType().GetProperty("id")?.GetValue(variables));
                     return Task.FromResult((T)(object)new ReturnId { UpdatedIdLong = id });

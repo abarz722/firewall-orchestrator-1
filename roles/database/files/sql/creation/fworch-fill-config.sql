@@ -57,6 +57,7 @@ insert into config (config_key, config_value, config_user) VALUES ('reqFlowInteg
 insert into config (config_key, config_value, config_user) VALUES ('reqAllowManualOwnerAdmin', 'False', 0);
 insert into config (config_key, config_value, config_user) VALUES ('reqActivatePathAnalysis', 'True', 0);
 insert into config (config_key, config_value, config_user) VALUES ('reqShowCompliance', 'False', 0);
+insert into config (config_key, config_value, config_user) VALUES ('reqImplicitApprovalComment', 'Automatically approved because the request task was promoted beyond the approval phase.', 0);
 insert into config (config_key, config_value, config_user) VALUES ('unusedTolerance', '400', 0);
 insert into config (config_key, config_value, config_user) VALUES ('creationTolerance', '90', 0);
 insert into config (config_key, config_value, config_user) VALUES ('ruleOwnershipMode', 'mixed', 0);

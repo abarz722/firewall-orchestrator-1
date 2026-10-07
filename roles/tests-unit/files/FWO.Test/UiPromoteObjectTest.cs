@@ -48,6 +48,22 @@ namespace FWO.Test
             Assert.That(component.Markup, Does.Contain("dropdown-input-"));
         }
 
+        [Test]
+        public async Task PromoteObject_WithComment_ShowsCommentForSingleEarlyTransition()
+        {
+            await using BunitContext context = new();
+            WfStateDict states = new();
+            StateMatrix stateMatrix = new()
+            {
+                LowestStartedState = 5,
+                Matrix = new() { [0] = [5] }
+            };
+            WfStatefulObject statefulObject = new() { StateId = 0 };
+            IRenderedComponent<PromoteObject> component = RenderPromoteObject(context, states, stateMatrix,
+                statefulObject, true, Roles.Requester);
+            Assert.That(component.Markup, Does.Contain("id=\"optComment\""));
+        }
+
 
     }
 }

@@ -2865,6 +2865,8 @@ INSERT INTO txt VALUES ('reqShowCompliance',    'German',   'Compliance-Modul an
 INSERT INTO txt VALUES ('reqShowCompliance',    'English',  'Show Compliance Module');
 INSERT INTO txt VALUES ('reqAllowedChangesByApprover','German', 'Erlaubte &Auml;nderungen durch Genehmiger');
 INSERT INTO txt VALUES ('reqAllowedChangesByApprover','English','Allowed changes by approver');
+INSERT INTO txt VALUES ('reqImplicitApprovalComment','German', 'Kommentar f&uuml;r implizite Genehmigung');
+INSERT INTO txt VALUES ('reqImplicitApprovalComment','English','Implicit approval comment');
 INSERT INTO txt VALUES ('ticket_fields',        'German',   'Ticket-Felder');
 INSERT INTO txt VALUES ('ticket_fields',        'English',  'Ticket fields');
 INSERT INTO txt VALUES ('task_fields',          'German',   'Auftragsfelder');
@@ -7229,6 +7231,8 @@ INSERT INTO txt VALUES ('H5581e', 'German',  'Benutzer ohne Schreibberechtigung 
 INSERT INTO txt VALUES ('H5581e', 'English', 'Users without write permission still keep read access to owners, modelling views and recertification reports.');
 INSERT INTO txt VALUES ('H5582', 'German',  'Name: Name der Eigent&uuml;mers');
 INSERT INTO txt VALUES ('H5582', 'English', 'Name: Owner name');
+INSERT INTO txt VALUES ('H5582a', 'German',  'Text, der bei einer impliziten Genehmigung als Kommentar am Genehmigungsobjekt gespeichert wird.');
+INSERT INTO txt VALUES ('H5582a', 'English', 'Text stored as a comment on the approval object when approval is implicit.');
 INSERT INTO txt VALUES ('H5583', 'German',  'Hauptverantwortlicher (DN): Name und Ldap-Pfad des zugeordneten Nutzers.
     Mindestens eines der Felder "Hauptverantwortlicher (DN)" oder "Gruppe" muss gef&uuml;llt sein.
 ');

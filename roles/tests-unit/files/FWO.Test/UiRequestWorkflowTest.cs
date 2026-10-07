@@ -382,6 +382,17 @@ namespace FWO.Test
             WfStatefulObject statefulObject,
             params string[] roles)
         {
+            return RenderPromoteObject(context, states, stateMatrix, statefulObject, false, roles);
+        }
+
+        internal static IRenderedComponent<PromoteObject> RenderPromoteObject(
+            BunitContext context,
+            WfStateDict states,
+            StateMatrix stateMatrix,
+            WfStatefulObject statefulObject,
+            bool withComment,
+            params string[] roles)
+        {
             context.JSInterop.Mode = JSRuntimeMode.Loose;
             context.Services.AddAuthorizationCore();
             context.Services.AddSingleton<IAuthorizationService, AllowAllAuthorizationService>();
@@ -394,6 +405,7 @@ namespace FWO.Test
             IRenderedComponent<CascadingAuthenticationState> wrapper = context.Render<CascadingAuthenticationState>(parameters => parameters
                 .AddChildContent<PromoteObject>(child => child
                     .Add(p => p.Promote, true)
+                    .Add(p => p.WithComment, withComment)
                     .Add(p => p.States, states)
                     .Add(p => p.StateMatrix, stateMatrix)
                     .Add(p => p.StatefulObject, statefulObject)

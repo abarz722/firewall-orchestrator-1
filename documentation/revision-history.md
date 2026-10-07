@@ -1,6 +1,7 @@
 # Firewall Orchestrator Revision History
 
 ## 9.6.1 - 02.10.2026
+- request workflow: implicit approvals created when a task bypasses the approval phase are marked as system-generated and receive a configurable approval comment; the comment can be changed under Workflow Customizing
 - request workflow UI: split request-task metadata and element editing into dedicated components while keeping the task type synchronized across the editors
 - request workflow UI: fix task-type initialization when creating a task after viewing an existing task, and keep the selected gateway option stable when "All" is selected
 - request workflow UI: correct owner-field layout and improve request-task, implementation-task, ticket and access-element test coverage through dedicated test fixtures

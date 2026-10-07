@@ -118,7 +118,47 @@ namespace FWO.Test
             await handler.ConfAddCommentToApproval("comment");
 
             Assert.That(handler.ActApproval.Comments, Has.Count.EqualTo(1));
+            Assert.That(handler.ActApproval.Comments[0].Comment.CommentText, Is.EqualTo("comment"));
+            Assert.That(handler.ActApproval.Comments[0].Comment.Scope, Is.EqualTo(WfObjectScopes.Approval.ToString()));
             Assert.That(handler.DisplayApprovalCommentMode, Is.False);
+        }
+
+        [Test]
+        public async Task ApproveTask_WithComment_StoresTerminalMetadataAndComment()
+        {
+            WfHandler handler = CreateApprovalHandler(4);
+            handler.userConfig.User.Dn = "cn=approver";
+            WfStatefulObject targetState = new() { StateId = 4 };
+            targetState.SetOptComment("approved with note");
+
+            await handler.ApproveTask(targetState);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(handler.ActApproval.StateId, Is.EqualTo(4));
+                Assert.That(handler.ActApproval.ApprovalDate, Is.Not.Null);
+                Assert.That(handler.ActApproval.ApproverDn, Is.EqualTo("cn=approver"));
+                Assert.That(handler.ActReqTask.StateId, Is.EqualTo(4));
+                Assert.That(handler.ActApproval.Comments, Has.Count.EqualTo(1));
+                Assert.That(handler.ActApproval.Comments[0].Comment.CommentText, Is.EqualTo("approved with note"));
+            });
+        }
+
+        [Test]
+        public async Task ApproveTask_BeforeTerminalState_DoesNotStampApprovalOrAddComment()
+        {
+            WfHandler handler = CreateApprovalHandler(4);
+
+            await handler.ApproveTask(new WfStatefulObject { StateId = 2 });
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(handler.ActApproval.StateId, Is.EqualTo(2));
+                Assert.That(handler.ActApproval.ApprovalDate, Is.Null);
+                Assert.That(handler.ActApproval.ApproverDn, Is.Null.Or.Empty);
+                Assert.That(handler.ActApproval.Comments, Is.Empty);
+                Assert.That(handler.ActReqTask.StateId, Is.EqualTo(2));
+            });
         }
 
         [Test]
@@ -145,6 +185,33 @@ namespace FWO.Test
             Assert.That(handler.ActApproval.AssignedGroup, Is.EqualTo("cn=group"));
             Assert.That(handler.ActApproval.RecentHandler, Is.EqualTo(handler.ActApproval.CurrentHandler));
             Assert.That(handler.DisplayAssignApprovalMode, Is.False);
+        }
+
+        private static WfHandler CreateApprovalHandler(int lowestEndState)
+        {
+            WfApproval approval = new() { Id = 5, TaskId = 10, StateId = 1 };
+            WfReqTask reqTask = new()
+            {
+                Id = 10,
+                TicketId = 20,
+                TaskType = WfTaskType.access.ToString(),
+                StateId = 1,
+                Approvals = [approval]
+            };
+            WfHandler handler = new()
+            {
+                ActStateMatrix = new StateMatrix { LowestInputState = 0, LowestEndState = lowestEndState },
+                MasterStateMatrix = new StateMatrix
+                {
+                    LowestEndState = 99,
+                    MinTicketCompleted = 100,
+                    PhaseActive = new() { { WorkflowPhases.planning, false } }
+                },
+                ActApproval = approval,
+                ActReqTask = reqTask,
+                ActTicket = new WfTicket { Id = 20, StateId = 1, Tasks = [reqTask] }
+            };
+            return handler;
         }
     }
 }
