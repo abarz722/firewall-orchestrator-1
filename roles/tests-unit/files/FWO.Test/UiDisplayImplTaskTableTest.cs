@@ -175,6 +175,34 @@ namespace FWO.Test
         }
 
         [Test]
+        public void AddImplTask_UsesMergedRequestTaskElementsWhenProvided()
+        {
+            DisplayImplTaskTable component = CreateComponent();
+            WfHandler handler = new()
+            {
+                ActReqTask = new WfReqTask { Id = 20, Title = "Request", TaskType = WfTaskType.access.ToString() },
+                Devices = []
+            };
+            WfReqTask mergedTask = new(handler.ActReqTask)
+            {
+                Elements =
+                [
+                    new WfReqElement { Field = ElemFieldType.source.ToString(), Name = "source-1" },
+                    new WfReqElement { Field = ElemFieldType.destination.ToString(), Name = "destination-1" },
+                    new WfReqElement { Field = ElemFieldType.destination.ToString(), Name = "destination-2" }
+                ]
+            };
+            SetMatrix(handler, WfTaskType.access.ToString(), CreateMatrix(0, 0, 10));
+            SetPrivateField(component, nameof(DisplayImplTaskTable.WfHandler), handler);
+            SetPrivateField(component, nameof(DisplayImplTaskTable.RequestTaskForCreation), mergedTask);
+
+            InvokePrivate(component, "AddImplTask");
+
+            Assert.That(handler.ActImplTask.ImplElements.Select(element => element.Name),
+                Is.EqualTo(new[] { "source-1", "destination-1", "destination-2" }));
+        }
+
+        [Test]
         public void OnParametersSetAsync_ResolvesAllDevicesAndCachedLookups()
         {
             DisplayImplTaskTable component = CreateComponent();

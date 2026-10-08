@@ -812,6 +812,7 @@ namespace FWO.Test
             {
                 Assert.That(userConfig.User.Name, Is.EqualTo("alice"));
                 Assert.That(userConfig.User.Dn, Is.EqualTo("uid=alice,ou=users,dc=example"));
+                Assert.That(userConfig.User.DbId, Is.EqualTo(kCallerUserId));
                 Assert.That(wfHandler.ChangerId, Is.EqualTo(kCallerUserId));
             });
         }
@@ -828,6 +829,7 @@ namespace FWO.Test
             {
                 // an empty name makes the history writer fall back to Roles.MiddlewareServer
                 Assert.That(userConfig.User.Name, Is.Empty);
+                Assert.That(userConfig.User.DbId, Is.Zero);
                 Assert.That(wfHandler.ChangerId, Is.Null);
             });
         }

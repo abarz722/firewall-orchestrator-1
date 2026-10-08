@@ -3205,6 +3205,73 @@ namespace FWO.Test
         }
 
         [Test]
+        public async Task PerformAction_AutoPromoteWithConfirmation_DisplaysMessage()
+        {
+            ActionHandlerTestApiConn apiConn = new()
+            {
+                States = [new WfState { Id = 1 }, new WfState { Id = 2 }]
+            };
+            List<(string Title, string Message, bool ErrorFlag)> messages = [];
+            WfHandler wfHandler = new((_, title, message, errorFlag) => messages.Add((title, message, errorFlag)),
+                new SimulatedUserConfig(), new System.Security.Claims.ClaimsPrincipal(), apiConn,
+                new MiddlewareClient("http://localhost/"), WorkflowPhases.request);
+            ActionHandler handler = new(apiConn, wfHandler, null, true);
+            await handler.Init();
+            WfTicket ticket = new() { StateId = 1 };
+            WfStateAction action = new()
+            {
+                Name = "Promote automatically",
+                ActionType = StateActionTypes.AutoPromote.ToString(),
+                ExternalParams = JsonSerializer.Serialize(new SimpleAutoPromoteParams { ToStateId = 2, ConfirmUiMessage = true })
+            };
+
+            await handler.PerformAction(action, ticket, WfObjectScopes.Ticket);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(ticket.StateId, Is.EqualTo(2));
+                Assert.That(messages, Has.Count.EqualTo(1));
+                Assert.That(messages[0].Title, Is.EqualTo("Promote automatically"));
+                Assert.That(messages[0].Message, Is.EqualTo("Automatically promoted to state 2"));
+                Assert.That(messages[0].ErrorFlag, Is.False);
+            });
+        }
+
+        [Test]
+        public async Task BundleTasksWithConfirmation_DisplaysMessage()
+        {
+            WfReqTask first = CreateBundleRequestTask(1, "10.0.0.1", "10.0.1.1");
+            WfReqTask second = CreateBundleRequestTask(2, "10.0.0.1", "10.0.1.2");
+            WfTicket ticket = CreateTicket(first, second);
+            ticket.Id = 7;
+            ActionHandlerTestApiConn apiConn = new();
+            List<(string Title, string Message, bool ErrorFlag)> messages = [];
+            WfHandler wfHandler = new((_, title, message, errorFlag) => messages.Add((title, message, errorFlag)),
+                new SimulatedUserConfig(), new System.Security.Claims.ClaimsPrincipal(), apiConn,
+                new MiddlewareClient("http://localhost/"), WorkflowPhases.request)
+            {
+                ActTicket = ticket
+            };
+            ActionHandler handler = new(apiConn, wfHandler, null, true);
+            WfStateAction action = new()
+            {
+                Name = "Bundle tasks",
+                ActionType = StateActionTypes.BundleTasks.ToString(),
+                ExternalParams = new BundleTasksActionParams { ConfirmUiMessage = true }.ToExternalParams()
+            };
+
+            await handler.PerformAction(action, ticket, WfObjectScopes.Ticket);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(messages, Has.Count.EqualTo(1));
+                Assert.That(messages[0].Title, Is.EqualTo("Bundle tasks"));
+                Assert.That(messages[0].Message, Is.EqualTo("2 request tasks bundled into 1"));
+                Assert.That(messages[0].ErrorFlag, Is.False);
+            });
+        }
+
+        [Test]
         public void BuildUnresolvedCleanZoneTasksWarning_ListsAffectedTaskIds()
         {
             string warning = (string)GetPrivateStaticMethod("BuildUnresolvedCleanZoneTasksWarning").Invoke(null, ["Bundle", new List<long> { 1, 3 }])!;

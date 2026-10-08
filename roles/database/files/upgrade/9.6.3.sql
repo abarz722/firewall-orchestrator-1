@@ -2,3 +2,7 @@
 INSERT INTO config (config_key, config_value, config_user)
 VALUES ('reqImplicitApprovalComment', 'Automatically approved because the request task was promoted beyond the approval phase.', 0)
 ON CONFLICT (config_key, config_user) DO NOTHING;
+
+INSERT INTO config (config_key, config_value, config_user)
+VALUES ('reqDisplayBundledTasksAsOne', 'False', 0)
+ON CONFLICT (config_key, config_user) DO NOTHING;

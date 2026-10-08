@@ -143,7 +143,7 @@
                 <textarea id="txt_implicit_approval_comment" class="form-control" rows="2" @bind="configData!.ReqImplicitApprovalComment"></textarea>
             </div>
         </div>
-        <div class="form-group row" data-toggle="tooltip" title="@(userConfig.PureLine("H5566") + "\r\n" + userConfig.PureLine("H5571") + "\r\n" +
+        <div class="form-group row mt-2" data-toggle="tooltip" title="@(userConfig.PureLine("H5566") + "\r\n" + userConfig.PureLine("H5571") + "\r\n" +
                 userConfig.PureLine("H5572") + "\r\n" + userConfig.PureLine("H5573") + "\r\n" + userConfig.PureLine("H5574") + "\r\n" +
                 userConfig.PureLine("H5577") + "\r\n" + userConfig.PureLine("H5575"))">
             <label class="col-form-label col-sm-3">@(userConfig.GetText("reqAutoCreateImplTasks")):</label>
@@ -157,6 +157,10 @@
             <label for="cbx_consider_bundling" class="col-form-label col-sm-2" data-toggle="tooltip" title="@(userConfig.PureLine("H5578"))">@(userConfig.GetText("reqConsiderBundling")):</label>
             <div class="col-sm-1" data-toggle="tooltip" title="@(userConfig.PureLine("H5578"))">
                 <input id="cbx_consider_bundling" type="checkbox" @bind="configData!.ReqConsiderBundling">
+            </div>
+            <label for="cbx_display_bundled_tasks_as_one" class="col-form-label col-sm-2">@(userConfig.GetText("reqDisplayBundledTasksAsOne")):</label>
+            <div class="col-sm-1">
+                <input id="cbx_display_bundled_tasks_as_one" type="checkbox" @bind="configData!.ReqDisplayBundledTasksAsOne">
             </div>
         </div>
     </form>

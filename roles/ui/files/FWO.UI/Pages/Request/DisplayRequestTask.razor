@@ -59,6 +59,17 @@
                             </div>
                         </div>
                     </div>
+                    @if (GetBundledTaskCount() > 1)
+                    {
+                        <div class="col-sm-3">
+                            <div class="form-group row">
+                                <label class="col-sm-6 col-form-label col-form-label-sm">@(userConfig.GetText("bundled_tasks")):</label>
+                                <div class="col-sm-6">
+                                    <label class="col-sm-12 h-100 border bg-secondary">@GetBundledTaskCount()</label>
+                                </div>
+                            </div>
+                        </div>
+                    }
                 </div>
                 <RequestTaskMetadataEditor @ref="metadataEditor" WfHandler="WfHandler"
                     AvailableTaskTypes="availableTaskTypes" Managements="managements"
@@ -132,7 +143,8 @@
                 <RequestTaskElementEditor @ref="elementEditor" WfHandler="WfHandler" TaskType="actTaskType"
                     CanEditField="CanEditReqTaskField" DisplayIpProtos="displayIpProtos"
                     SelectableIpProtos="selectableIpProtos" RuleDevice="actRuleDevice"
-                    ManagementId="@(actManagement?.Id ?? WfHandler.ActReqTask.ManagementId)" />
+                    ManagementId="@(actManagement?.Id ?? WfHandler.ActReqTask.ManagementId)"
+                    DisplayTask="GetBundledDisplayTask()" />
 
                 <hr />
                 @if(!WfHandler.EditReqTaskMode)
@@ -157,7 +169,8 @@
                     <h5 class="mt-2">@(userConfig.GetText("implementation_tasks"))</h5>
 
                     <DisplayImplTaskTable Phase="Phase" States="States" WfHandler="WfHandler" ResetParent="Reset"
-                        AllImplTasks="WfHandler.ActReqTask.ImplementationTasks" StartImplPhase="StartImplementationPhase"/>
+                        AllImplTasks="WfHandler.ActReqTask.ImplementationTasks" StartImplPhase="StartImplementationPhase"
+                        RequestTaskForCreation="GetBundledDisplayTask() ?? WfHandler.ActReqTask"/>
                 }
             </form>
         }
@@ -453,7 +466,7 @@
                 await WfHandler.ActionHandler.PerformAction(action, WfHandler.ActReqTask, WfObjectScopes.RequestTask,
                     metadataEditor?.CurrentOwner ?? actOwner, WfHandler.ActReqTask.TicketId);
             }
-            if(action.ActionType == nameof(StateActionTypes.AddApproval) && await WfHandler.ReloadActReqTask())
+            if (await WfHandler.ReloadActReqTask())
             {
                 elementEditor?.InitializeElements();
                 await InitComments();
@@ -505,6 +518,70 @@
     private bool IsRequestTaskReadOnly()
     {
         return WfHandler.ReadOnlyMode || !(WfHandler.EditReqTaskMode || WfHandler.PlanReqTaskMode || WfHandler.ApproveReqTaskMode);
+    }
+
+    private int GetBundledTaskCount()
+    {
+        if (Phase == WorkflowPhases.request
+            || !userConfig.ReqDisplayBundledTasksAsOne
+            || !userConfig.ReqConsiderBundling)
+        {
+            return 0;
+        }
+
+        string bundleId = WfHandler.ActReqTask.GetAddInfoValue(AdditionalInfoKeys.FlowBundleId);
+        return string.IsNullOrWhiteSpace(bundleId)
+            ? 0
+            : WfHandler.ActTicket.Tasks.Count(task => task.GetAddInfoValue(AdditionalInfoKeys.FlowBundleId) == bundleId
+                   && task.StateId == WfHandler.ActReqTask.StateId);
+    }
+
+    private WfReqTask? GetBundledDisplayTask()
+    {
+        if (GetBundledTaskCount() <= 1)
+        {
+            return null;
+        }
+
+        string bundleId = WfHandler.ActReqTask.GetAddInfoValue(AdditionalInfoKeys.FlowBundleId);
+        List<WfReqTask> bundledTasks = WfHandler.ActTicket.Tasks
+            .Where(task => task.GetAddInfoValue(AdditionalInfoKeys.FlowBundleId) == bundleId
+                && task.StateId == WfHandler.ActReqTask.StateId)
+            .ToList();
+
+        WfReqTask mergedTask = new(bundledTasks[0])
+        {
+            Elements = [.. bundledTasks.SelectMany(task => task.Elements)
+                .GroupBy(ElementIdentityKey)
+                .Select(group => group.First())]
+        };
+        return mergedTask;
+    }
+
+    private static object ElementIdentityKey(WfReqElement element)
+    {
+        return new
+        {
+            element.Field,
+            element.RequestAction,
+            element.DeviceId,
+            element.IpString,
+            element.IpEnd,
+            element.Port,
+            element.PortEnd,
+            element.ProtoId,
+            element.NetworkId,
+            element.ServiceId,
+            element.FlowNetworkObjectId,
+            element.FlowNetworkGroupId,
+            element.FlowServiceObjectId,
+            element.FlowServiceGroupId,
+            element.UserId,
+            element.OriginalNatId,
+            element.RuleUid,
+            element.GroupName,
+            element.Name
+        };
     }
 
     private async Task StartImplementationPhase(WfImplTask implTask)

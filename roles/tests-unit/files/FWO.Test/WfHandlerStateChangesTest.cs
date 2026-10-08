@@ -252,6 +252,45 @@ namespace FWO.Test
         }
 
         [Test]
+        public async Task PromoteReqTask_PromotesAllBundledTasksToTheSameState()
+        {
+            WfReqTask firstTask = new()
+            {
+                Id = 7,
+                TicketId = 10,
+                StateId = 0,
+                TaskType = WfTaskType.access.ToString()
+            };
+            firstTask.SetAddInfo(AdditionalInfoKeys.FlowBundleId, "bundle-7-8");
+            WfReqTask secondTask = new()
+            {
+                Id = 8,
+                TicketId = 10,
+                StateId = 0,
+                TaskType = WfTaskType.access.ToString()
+            };
+            secondTask.SetAddInfo(AdditionalInfoKeys.FlowBundleId, "bundle-7-8");
+            WfHandler handler = new()
+            {
+                ActReqTask = firstTask,
+                ActTicket = new WfTicket { Id = 10, Tasks = [firstTask, secondTask] },
+                MasterStateMatrix = new StateMatrix { MinTicketCompleted = 99, LowestEndState = 10 },
+                ActStateMatrix = new StateMatrix { LowestStartedState = 2, LowestEndState = 10 }
+            };
+            handler.userConfig.ReqConsiderBundling = true;
+            SetMatrix(handler, WfTaskType.access.ToString(), handler.ActStateMatrix);
+
+            await handler.PromoteReqTask(new WfStatefulObject { StateId = 2 });
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(handler.ActReqTask.StateId, Is.EqualTo(2));
+                Assert.That(handler.ActTicket.Tasks.Select(task => task.StateId), Is.EqualTo(new[] { 2, 2 }));
+                Assert.That(handler.ActTicket.Tasks.All(task => task.CurrentHandler == handler.userConfig.User), Is.True);
+            });
+        }
+
+        [Test]
         public async Task PromoteReqTask_WithStartedHandlerDisabled_DoesNotSetStartOrHandler()
         {
             WfHandler handler = new();

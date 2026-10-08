@@ -291,6 +291,9 @@ namespace FWO.Config.Api.Data
         [JsonProperty("reqConsiderBundling"), JsonPropertyName("reqConsiderBundling")]
         public bool ReqConsiderBundling { get; set; } = false;
 
+        [JsonProperty("reqDisplayBundledTasksAsOne"), JsonPropertyName("reqDisplayBundledTasksAsOne")]
+        public bool ReqDisplayBundledTasksAsOne { get; set; } = false;
+
         [JsonProperty("reqActivatePathAnalysis"), JsonPropertyName("reqActivatePathAnalysis")]
         public bool ReqActivatePathAnalysis { get; set; } = true;
 

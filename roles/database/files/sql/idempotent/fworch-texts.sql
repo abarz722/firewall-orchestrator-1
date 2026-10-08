@@ -2889,6 +2889,8 @@ INSERT INTO txt VALUES ('reqAutoCreateImplTasks','German', 	'Autom. Erzeugen von
 INSERT INTO txt VALUES ('reqAutoCreateImplTasks','English', 'Auto-create implementation tasks');
 INSERT INTO txt VALUES ('reqConsiderBundling',  'German', 	'B&uuml;ndelung ber&uuml;cksichtigen');
 INSERT INTO txt VALUES ('reqConsiderBundling',  'English',  'Consider bundling');
+INSERT INTO txt VALUES ('reqDisplayBundledTasksAsOne', 'German',  'Geb&uuml;ndelte Aufgaben als eine Aufgabe anzeigen');
+INSERT INTO txt VALUES ('reqDisplayBundledTasksAsOne', 'English', 'Display bundled tasks as one task');
 INSERT INTO txt VALUES ('reqActivatePathAnalysis','German', 'Pfadanalyse aktivieren');
 INSERT INTO txt VALUES ('reqActivatePathAnalysis','English','Activate Path Analysis');
 INSERT INTO txt VALUES ('reqShowCompliance',    'German',   'Compliance-Modul anzeigen');
@@ -3541,6 +3543,12 @@ INSERT INTO txt VALUES ('confirm_modelling_update', 'German',   'Aktualisierung 
 INSERT INTO txt VALUES ('confirm_modelling_update', 'English',  'Confirm modelling update via UI message');
 INSERT INTO txt VALUES ('confirm_flow_creation',    'German',   'Flow-Erzeugung per UI-Meldung best&auml;tigen');
 INSERT INTO txt VALUES ('confirm_flow_creation',    'English',  'Confirm flow creation via UI message');
+INSERT INTO txt VALUES ('confirm_action_message',   'German',   'Aktion per UI-Meldung best&auml;tigen');
+INSERT INTO txt VALUES ('confirm_action_message',   'English',  'Confirm action via UI message');
+INSERT INTO txt VALUES ('auto_promoted_to',         'German',   'Automatisch in Status ');
+INSERT INTO txt VALUES ('auto_promoted_to',         'English',  'Automatically promoted to state ');
+INSERT INTO txt VALUES ('tasks_bundled_into',       'German',   ' Auftr&auml;ge in B&uuml;ndel gruppiert: ');
+INSERT INTO txt VALUES ('tasks_bundled_into',       'English',  ' request tasks bundled into ');
 INSERT INTO txt VALUES ('flow_creation_succeeded',  'German',   'Flow-DB-Eintr&auml;ge wurden erzeugt.');
 INSERT INTO txt VALUES ('flow_creation_succeeded',  'English',  'Flow DB entries were created.');
 INSERT INTO txt VALUES ('flow_creation_failed',     'German',   'Flow-DB-Eintr&auml;ge konnten nicht erzeugt werden. Pr&uuml;fen Sie das Workflow-Log auf nicht aufl&ouml;sbare Objekte oder Dienste.');

@@ -182,25 +182,53 @@ namespace FWO.Services.Workflow
         {
             try
             {
-                ActReqTask.StateId = reqTask.StateId;
-                if (setStartedHandler && ActReqTask.Start == null && ActReqTask.StateId >= ActStateMatrix.LowestStartedState)
+                List<WfReqTask> requestTasks = GetBundledRequestTasks(ActReqTask);
+                foreach (WfReqTask requestTask in requestTasks)
                 {
-                    ActReqTask.Start = DateTime.Now;
-                    ActReqTask.CurrentHandler = userConfig.User;
+                    // ActReqTask is a working copy; use it for the selected task and the
+                    // ticket instance for its bundled siblings so every task is persisted
+                    // and its request-task actions are executed independently.
+                    WfReqTask taskToPromote = requestTask.Id == ActReqTask.Id ? ActReqTask : requestTask;
+                    await PromoteSingleReqTask(taskToPromote, reqTask.StateId, setStartedHandler);
                 }
-                await UpdateActReqTaskState();
-
-                if (Phase == WorkflowPhases.planning)
-                {
-                    await UpgradeImplTaskStatesToReqTask(ActReqTask);
-                }
-
                 await UpdateActTicketStateFromReqTasks();
                 DisplayPromoteReqTaskMode = false;
             }
             catch (Exception exception)
             {
                 DisplayMessageInUi(exception, userConfig.GetText("promote_task"), "", true);
+            }
+        }
+
+        private async Task PromoteSingleReqTask(WfReqTask reqTask, int targetStateId, bool setStartedHandler)
+        {
+            StateMatrix reqTaskMatrix = stateMatrixDict.Matrices.TryGetValue(reqTask.TaskType, out StateMatrix? configuredMatrix)
+                ? configuredMatrix
+                : ActStateMatrix;
+            reqTask.StateId = targetStateId;
+            if (setStartedHandler && reqTask.Start == null && reqTask.StateId >= reqTaskMatrix.LowestStartedState)
+            {
+                reqTask.Start = DateTime.Now;
+                reqTask.CurrentHandler = userConfig.User;
+            }
+
+            if (reqTask.Id == ActReqTask.Id)
+            {
+                await UpdateActReqTaskState();
+            }
+            else
+            {
+                if (dbAcc != null)
+                {
+                    AuditUnexpectedStateTransition(reqTask, WfObjectScopes.RequestTask, reqTaskMatrix);
+                    await dbAcc.UpdateReqTaskStateInDb(reqTask);
+                }
+                SyncActTicketFromReqTask(reqTask);
+            }
+
+            if (Phase == WorkflowPhases.planning)
+            {
+                await UpgradeImplTaskStatesToReqTask(reqTask);
             }
         }
 

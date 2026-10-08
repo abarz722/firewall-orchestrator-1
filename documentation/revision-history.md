@@ -2,6 +2,7 @@
 
 ## 9.6.3 - 07.10.2026
 - request workflow: implicit approvals created when a task bypasses the approval phase are marked as system-generated and receive a configurable approval comment; the comment can be changed under Workflow Customizing
+- request workflow: optionally display request tasks sharing a flow bundle ID as one task when their states match; differing states remain separate
 
 ## 9.6.2 - 02.10.2026
 - add workflow task types object_create and object_modify for a single network object (host, network,

@@ -48,6 +48,80 @@ namespace FWO.Test
             });
         }
 
+        [Test]
+        public void GetBundledTaskCount_OnlyCountsTasksWithSameStateWhenDisplayGroupingIsEnabled()
+        {
+            WfReqTask activeTask = new() { Id = 1, StateId = 2 };
+            activeTask.SetAddInfo(AdditionalInfoKeys.FlowBundleId, "bundle-1-2");
+            WfReqTask sameStateTask = new() { Id = 2, StateId = 2 };
+            sameStateTask.SetAddInfo(AdditionalInfoKeys.FlowBundleId, "bundle-1-2");
+            WfReqTask differentStateTask = new() { Id = 3, StateId = 3 };
+            differentStateTask.SetAddInfo(AdditionalInfoKeys.FlowBundleId, "bundle-1-2");
+            SimulatedUserConfig userConfig = new()
+            {
+                ReqConsiderBundling = true,
+                ReqDisplayBundledTasksAsOne = true
+            };
+            DisplayRequestTask component = new();
+            SetPrivateField(component, "userConfig", userConfig);
+            SetPrivateField(component, nameof(DisplayRequestTask.WfHandler), new WfHandler
+            {
+                ActReqTask = activeTask,
+                ActTicket = new WfTicket { Tasks = [activeTask, sameStateTask, differentStateTask] }
+            });
+            SetPrivateField(component, nameof(DisplayRequestTask.Phase), WorkflowPhases.approval);
+
+            Assert.That(InvokePrivate<int>(component, "GetBundledTaskCount"), Is.EqualTo(2));
+        }
+
+        [Test]
+        public void GetBundledDisplayTask_MergesDistinctElementsWithoutChangingActiveTask()
+        {
+            WfReqTask activeTask = CreateBundledAccessTask(1, "10.0.0.1/32", "10.0.1.1/32");
+            WfReqTask secondTask = CreateBundledAccessTask(2, "10.0.0.1/32", "10.0.1.2/32");
+            SimulatedUserConfig userConfig = new()
+            {
+                ReqConsiderBundling = true,
+                ReqDisplayBundledTasksAsOne = true
+            };
+            DisplayRequestTask component = new();
+            SetPrivateField(component, "userConfig", userConfig);
+            SetPrivateField(component, nameof(DisplayRequestTask.WfHandler), new WfHandler
+            {
+                ActReqTask = activeTask,
+                ActTicket = new WfTicket { Tasks = [activeTask, secondTask] }
+            });
+            SetPrivateField(component, nameof(DisplayRequestTask.Phase), WorkflowPhases.approval);
+
+            WfReqTask mergedTask = InvokePrivate<WfReqTask>(component, "GetBundledDisplayTask");
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(mergedTask.GetNwObjectElements(ElemFieldType.source), Has.Count.EqualTo(1));
+                Assert.That(mergedTask.GetNwObjectElements(ElemFieldType.destination)
+                    .Select(destination => destination.IpString), Is.EquivalentTo(["10.0.1.1/32", "10.0.1.2/32"]));
+                Assert.That(mergedTask.GetServiceElements(), Has.Count.EqualTo(1));
+                Assert.That(activeTask.Elements, Has.Count.EqualTo(3));
+            });
+        }
+
+        private static WfReqTask CreateBundledAccessTask(long id, string source, string destination)
+        {
+            WfReqTask task = new()
+            {
+                Id = id,
+                StateId = 2,
+                Elements =
+                [
+                    new WfReqElement { Field = ElemFieldType.source.ToString(), IpString = source, Name = "source" },
+                    new WfReqElement { Field = ElemFieldType.destination.ToString(), IpString = destination, Name = destination },
+                    new WfReqElement { Field = ElemFieldType.service.ToString(), Port = 443, ProtoId = 6, Name = "https" }
+                ]
+            };
+            task.SetAddInfo(AdditionalInfoKeys.FlowBundleId, "bundle-1-2");
+            return task;
+        }
+
         private static void SetPrivateField<T>(object component, string fieldName, T value)
         {
             PropertyInfo? property = component.GetType().GetProperty(fieldName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
