@@ -1426,7 +1426,7 @@ internal class WorkflowTicketServiceTest
     }
 
     [Test]
-    public async Task CreateTicket_ReturnsOkResponseAndUsesPayloadRequester()
+    public async Task CreateTicket_UsesAuthenticatedRequesterAndStoresPayloadRequesterMetadata()
     {
         WorkflowTicketServiceApiConn apiConnection = new()
         {
@@ -1517,6 +1517,12 @@ internal class WorkflowTicketServiceTest
             Assert.That(apiConnection.LastTicketWriter, Is.Not.Null);
             Assert.That(apiConnection.LastTicketWriter!.Tasks, Has.Count.EqualTo(3));
             Assert.That(apiConnection.CreatedTicket!.Requester?.DbId, Is.EqualTo(77));
+            Assert.That(apiConnection.CreatedTicket.AdditionalInfo, Does.Contain("\"requestorName\":\"Payload Requester\""));
+            Assert.That(apiConnection.CreatedTicket.AdditionalInfo, Does.Contain("\"requestorId\":\"payload-requester\""));
+            Assert.That(apiConnection.CreatedTicket.AdditionalInfo, Does.Contain("\"requestContactName\":\"Bob Approver\""));
+            Assert.That(apiConnection.CreatedTicket.AdditionalInfo, Does.Contain("\"requestContactId\":\"bob\""));
+            Assert.That(apiConnection.LastTicketWriter.Tasks[0].GetAddInfoValue(AdditionalInfoKeys.RequestorName), Is.Empty);
+            Assert.That(apiConnection.LastTicketWriter.Tasks[2].GetAddInfoValue(AdditionalInfoKeys.RequestContactName), Is.Empty);
             Assert.That(apiConnection.CreatedTicket.Tasks[2].Owners, Has.Count.EqualTo(1));
             Assert.That(apiConnection.CreatedTicket.Tasks[2].Owners[0].Owner.Id, Is.EqualTo(42));
             Assert.That(apiConnection.LastTicketWriter!.Tasks[2].Owners.WfOwnerList, Has.Count.EqualTo(1));
@@ -3233,6 +3239,7 @@ internal class WorkflowTicketServiceTest
             {
                 Id = ticketId,
                 Title = Convert.ToString(GetVariable(variables, "title")) ?? "",
+                AdditionalInfo = Convert.ToString(GetVariable(variables, "additionalInfo")),
                 StateId = Convert.ToInt32(GetVariable(variables, "state") ?? 0),
                 Reason = Convert.ToString(GetVariable(variables, "reason")) ?? "",
                 PreWorkflowTicketReference = Convert.ToString(GetVariable(variables, "preWorkflowTicketReference")),

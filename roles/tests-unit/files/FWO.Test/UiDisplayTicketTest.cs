@@ -1,4 +1,5 @@
 using Bunit;
+using FWO.Data;
 using FWO.Data.Workflow;
 using FWO.Services.Workflow;
 using FWO.Ui.Pages.Request;
@@ -177,6 +178,26 @@ namespace FWO.Test
                 Assert.That(visibility.ShowReason, Is.True);
                 Assert.That(visibility.ShowComments, Is.False);
             });
+        }
+
+        [Test]
+        public void DisplayTicket_UsesExternalRequestorNameAndId()
+        {
+            WfHandler handler = new()
+            {
+                ActTicket = new WfTicket
+                {
+                    Id = 10,
+                    Requester = new UiUser { Name = "Authenticated User" },
+                    AdditionalInfo = "{\"requestorName\":\"Alice Example\",\"requestorId\":\"alice\"}"
+                }
+            };
+            DisplayTicket component = CreateDisplayTicket(handler, WorkflowPhases.request);
+
+            string requesterDisplay = (string)GetPrivateMethod(typeof(DisplayTicket), "BuildTicketRequesterDisplay")
+                .Invoke(component, null)!;
+
+            Assert.That(requesterDisplay, Is.EqualTo("Alice Example (alice)"));
         }
 
         [Test]

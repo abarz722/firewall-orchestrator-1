@@ -49,7 +49,8 @@ internal sealed class WorkflowTicketBuilder
             Title = request.Title,
             PreWorkflowTicketReference = request.PreWorkflowTicketReference,
             StateId = ticketStateId,
-            Requester = BuildRequester(request, requesterId),
+            Requester = BuildRequester(requesterId),
+            AdditionalInfo = BuildTicketAdditionalInfo(request),
             Reason = BuildRequestReason(request),
             Locked = true,
             Tasks = tasks
@@ -57,14 +58,12 @@ internal sealed class WorkflowTicketBuilder
     }
 
     /// <summary>
-    /// Resolves the requestor into a user object used by the database insert.
+    /// Resolves the authenticated caller into the user object used by the database insert.
     /// </summary>
-    private static UiUser BuildRequester(CreateTicketRequest request, int requesterId)
+    private static UiUser BuildRequester(int requesterId)
     {
         return new UiUser
         {
-            Name = request.RequestorName,
-            Dn = request.RequestorId,
             DbId = requesterId
         };
     }
@@ -72,6 +71,16 @@ internal sealed class WorkflowTicketBuilder
     private static string BuildRequestReason(CreateTicketRequest request)
     {
         return $"{request.RuleContactName} ({request.RuleContactId})";
+    }
+
+    private static string BuildTicketAdditionalInfo(CreateTicketRequest request)
+    {
+        Dictionary<string, string> additionalInfo = new();
+        AddAdditionalInfoValue(additionalInfo, AdditionalInfoKeys.RequestContactName, request.RuleContactName);
+        AddAdditionalInfoValue(additionalInfo, AdditionalInfoKeys.RequestContactId, request.RuleContactId);
+        AddAdditionalInfoValue(additionalInfo, AdditionalInfoKeys.RequestorName, request.RequestorName);
+        AddAdditionalInfoValue(additionalInfo, AdditionalInfoKeys.RequestorId, request.RequestorId);
+        return JsonSerializer.Serialize(additionalInfo);
     }
 
     /// <summary>
@@ -225,7 +234,7 @@ internal sealed class WorkflowTicketBuilder
             TaskType = WfTaskType.group_create.ToString(),
             RequestAction = RequestAction.create.ToString(),
             StateId = taskContext.TicketStateId,
-            AdditionalInfo = BuildGroupAdditionalInfo(request, groupEntity.DisplayName, group.Id),
+            AdditionalInfo = BuildGroupAdditionalInfo(groupEntity.DisplayName, group.Id),
             Elements = WorkflowTicketElementValidation.BuildGroupMemberElements(group.MemberIds,
                 CreateElementContext(taskContext, $"{groupPath}.memberIds",
                     memberId => BuildGroupMemberElement(memberId, taskContext.Entities, ElemFieldType.source, taskContext.FlowReferences))),
@@ -249,7 +258,7 @@ internal sealed class WorkflowTicketBuilder
             TaskType = WfTaskType.group_create.ToString(),
             RequestAction = RequestAction.create.ToString(),
             StateId = taskContext.TicketStateId,
-            AdditionalInfo = BuildGroupAdditionalInfo(request, groupEntity.DisplayName, group.Id),
+            AdditionalInfo = BuildGroupAdditionalInfo(groupEntity.DisplayName, group.Id),
             Elements = WorkflowTicketElementValidation.BuildGroupMemberElements(group.MemberIds,
                 CreateElementContext(taskContext, $"{groupPath}.memberIds",
                     memberId => BuildGroupMemberElement(memberId, taskContext.Entities, ElemFieldType.service, taskContext.FlowReferences))),
@@ -329,7 +338,7 @@ internal sealed class WorkflowTicketBuilder
             Reason = rule.ViolationJustification,
             TargetBeginDate = timeEntity?.TimeStart,
             TargetEndDate = timeEntity?.TimeEnd,
-            AdditionalInfo = BuildAdditionalInfo(request.RuleContactName, request.RuleContactId, request.RequestorName, request.RequestorId, timeEntity),
+            AdditionalInfo = BuildAdditionalInfo(timeEntity),
             Elements = elements,
             Approvals = [BuildApproval(taskContext.TicketStateId)],
             Owners = taskOwner == null ? [] : [new() { Owner = taskOwner }],
@@ -527,35 +536,20 @@ internal sealed class WorkflowTicketBuilder
         };
     }
 
-    private static string BuildGroupAdditionalInfo(CreateTicketRequest request, string groupName, long groupId)
+    private static string BuildGroupAdditionalInfo(string groupName, long groupId)
     {
-        Dictionary<string, string> additionalInfo = BuildRequestContactInfo(request.RuleContactName, request.RuleContactId, request.RequestorName, request.RequestorId);
+        Dictionary<string, string> additionalInfo = new();
         additionalInfo[AdditionalInfoKeys.GrpName] = groupName;
         additionalInfo[AdditionalInfoKeys.GroupId] = groupId.ToString(CultureInfo.InvariantCulture);
         return JsonSerializer.Serialize(additionalInfo);
     }
 
-    private static Dictionary<string, string> BuildRequestContactInfo(string? requestContactName, string? requestContactId, string? requestorName, string? requestorId)
+    private static void AddAdditionalInfoValue(Dictionary<string, string> additionalInfo, string key, string? value)
     {
-        Dictionary<string, string> additionalInfo = new();
-        if (!string.IsNullOrWhiteSpace(requestContactName))
+        if (!string.IsNullOrWhiteSpace(value))
         {
-            additionalInfo[AdditionalInfoKeys.RequestContactName] = requestContactName;
+            additionalInfo[key] = value;
         }
-        if (!string.IsNullOrWhiteSpace(requestContactId))
-        {
-            additionalInfo[AdditionalInfoKeys.RequestContactId] = requestContactId;
-        }
-        if (!string.IsNullOrWhiteSpace(requestorName))
-        {
-            additionalInfo[AdditionalInfoKeys.RequestorName] = requestorName;
-        }
-        if (!string.IsNullOrWhiteSpace(requestorId))
-        {
-            additionalInfo[AdditionalInfoKeys.RequestorId] = requestorId;
-        }
-
-        return additionalInfo;
     }
 
     private static void AddEntity(Dictionary<long, WorkflowTicketEntity> entities, long id, WorkflowTicketEntity entity)
@@ -595,10 +589,9 @@ internal sealed class WorkflowTicketBuilder
         };
     }
 
-    private static string BuildAdditionalInfo(string requestContactName, string requestContactId, string requestorName, string requestorId,
-        WorkflowTicketEntity? timeEntity)
+    private static string BuildAdditionalInfo(WorkflowTicketEntity? timeEntity)
     {
-        Dictionary<string, string> additionalInfo = BuildRequestContactInfo(requestContactName, requestContactId, requestorName, requestorId);
+        Dictionary<string, string> additionalInfo = new();
         if (timeEntity != null)
         {
             additionalInfo[AdditionalInfoKeys.TimeObjectId] = timeEntity.Id.ToString(CultureInfo.InvariantCulture);

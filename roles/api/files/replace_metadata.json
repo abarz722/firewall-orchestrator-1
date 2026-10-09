@@ -35560,6 +35560,7 @@
                     "columns": [
                       "id",
                       "locked",
+                      "additional_info",
                       "assigned_group",
                       "external_ticket_id",
                       "pre_workflow_ticket_reference",
@@ -35604,7 +35605,8 @@
                       "date_completed",
                       "date_created",
                       "ticket_deadline",
-                      "locked"
+                      "locked",
+                      "additional_info"
                     ]
                   },
                   "comment": ""
@@ -35632,7 +35634,8 @@
                       "date_completed",
                       "date_created",
                       "ticket_deadline",
-                      "locked"
+                      "locked",
+                      "additional_info"
                     ]
                   }
                 }
@@ -35660,7 +35663,8 @@
                       "date_completed",
                       "date_created",
                       "ticket_deadline",
-                      "locked"
+                      "locked",
+                      "additional_info"
                     ],
                     "filter": {}
                   }
@@ -35687,7 +35691,8 @@
                       "date_completed",
                       "date_created",
                       "ticket_deadline",
-                      "locked"
+                      "locked",
+                      "additional_info"
                     ],
                     "filter": {}
                   }
@@ -35714,7 +35719,8 @@
                       "date_completed",
                       "date_created",
                       "ticket_deadline",
-                      "locked"
+                      "locked",
+                      "additional_info"
                     ],
                     "filter": {}
                   }
@@ -35741,7 +35747,8 @@
                       "date_completed",
                       "date_created",
                       "ticket_deadline",
-                      "locked"
+                      "locked",
+                      "additional_info"
                     ],
                     "filter": {}
                   },
@@ -35769,7 +35776,8 @@
                       "date_completed",
                       "date_created",
                       "ticket_deadline",
-                      "locked"
+                      "locked",
+                      "additional_info"
                     ],
                     "filter": {}
                   },
@@ -35797,7 +35805,8 @@
                       "date_completed",
                       "date_created",
                       "ticket_deadline",
-                      "locked"
+                      "locked",
+                      "additional_info"
                     ],
                     "filter": {}
                   }
@@ -35824,7 +35833,8 @@
                       "date_completed",
                       "date_created",
                       "ticket_deadline",
-                      "locked"
+                      "locked",
+                      "additional_info"
                     ],
                     "filter": {}
                   },
@@ -35852,7 +35862,8 @@
                       "date_completed",
                       "date_created",
                       "ticket_deadline",
-                      "locked"
+                      "locked",
+                      "additional_info"
                     ],
                     "filter": {}
                   },
@@ -35880,7 +35891,8 @@
                       "date_completed",
                       "date_created",
                       "ticket_deadline",
-                      "locked"
+                      "locked",
+                      "additional_info"
                     ],
                     "filter": {}
                   }
@@ -35907,7 +35919,8 @@
                       "date_completed",
                       "date_created",
                       "ticket_deadline",
-                      "locked"
+                      "locked",
+                      "additional_info"
                     ],
                     "filter": {}
                   }

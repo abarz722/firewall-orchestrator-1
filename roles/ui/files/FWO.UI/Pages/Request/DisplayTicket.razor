@@ -42,7 +42,7 @@
                         <div class="form-group row">
                             <label class="col-sm-4 col-form-label col-form-label-sm">@(userConfig.GetText("requester")):</label>
                             <div class="col-sm-8">
-                                <label class="col-sm-12 border bg-secondary">@WfHandler.ActTicket.Requester?.Name</label>
+                                <label class="col-sm-12 border bg-secondary">@TicketRequesterDisplay</label>
                             </div>
                         </div>
                     </div>
@@ -243,6 +243,40 @@
     private bool WorkInProgress = false;
     private WfPriority? selectedPriority;
     private bool firstParamSet = true;
+
+    private string TicketRequesterDisplay => BuildTicketRequesterDisplay();
+
+    private string BuildTicketRequesterDisplay()
+    {
+        string requestorName = GetTicketContactValue(AdditionalInfoKeys.RequestorName);
+        string requestorId = GetTicketContactValue(AdditionalInfoKeys.RequestorId);
+        if (!string.IsNullOrWhiteSpace(requestorName) && !string.IsNullOrWhiteSpace(requestorId))
+        {
+            return $"{requestorName} ({requestorId})";
+        }
+        if (!string.IsNullOrWhiteSpace(requestorName))
+        {
+            return requestorName;
+        }
+        if (!string.IsNullOrWhiteSpace(requestorId))
+        {
+            return requestorId;
+        }
+        return WfHandler.ActTicket.Requester?.Name ?? "";
+    }
+
+    private string GetTicketContactValue(string key)
+    {
+        string value = WfHandler.ActTicket.GetAdditionalInfoValue(key);
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            return value;
+        }
+
+        return WfHandler.ActTicket.Tasks
+            .Select(task => task.GetAddInfoValue(key))
+            .FirstOrDefault(taskValue => !string.IsNullOrWhiteSpace(taskValue)) ?? "";
+    }
 
     protected override async Task OnParametersSetAsync()
     {
