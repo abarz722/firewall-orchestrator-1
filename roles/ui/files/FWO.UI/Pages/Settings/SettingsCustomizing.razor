@@ -37,6 +37,34 @@
                 </div>
             </div>
         </div>
+        <hr />
+        <div class="form-group row" data-toggle="tooltip" title="@(userConfig.PureLine("H5580"))">
+            <label class="col-form-label col-sm-3">@(userConfig.GetText("reqTicketFieldVisibility")):</label>
+            <div class="col-sm-9">
+                <div class="row">
+                    <div class="form-group col-6 col-md-4 col-xl-2">
+                        <input id="cbx_show_ticket_requester" type="checkbox" @bind="ticketFieldVisibilityConfig.ShowRequester" />
+                        <label for="cbx_show_ticket_requester" class="col-form-label">@(userConfig.GetText("requester"))</label>
+                    </div>
+                    <div class="form-group col-6 col-md-4 col-xl-2">
+                        <input id="cbx_show_ticket_priority" type="checkbox" @bind="ticketFieldVisibilityConfig.ShowPriority" />
+                        <label for="cbx_show_ticket_priority" class="col-form-label">@(userConfig.GetText("priority"))</label>
+                    </div>
+                    <div class="form-group col-6 col-md-4 col-xl-2">
+                        <input id="cbx_show_ticket_deadline" type="checkbox" @bind="ticketFieldVisibilityConfig.ShowDeadline" />
+                        <label for="cbx_show_ticket_deadline" class="col-form-label">@(userConfig.GetText("deadline"))</label>
+                    </div>
+                    <div class="form-group col-6 col-md-4 col-xl-2">
+                        <input id="cbx_show_ticket_reason" type="checkbox" @bind="ticketFieldVisibilityConfig.ShowReason" />
+                        <label for="cbx_show_ticket_reason" class="col-form-label">@(userConfig.GetText("reason"))</label>
+                    </div>
+                    <div class="form-group col-6 col-md-4 col-xl-2">
+                        <input id="cbx_show_ticket_comments" type="checkbox" @bind="ticketFieldVisibilityConfig.ShowComments" />
+                        <label for="cbx_show_ticket_comments" class="col-form-label">@(userConfig.GetText("comments"))</label>
+                    </div>
+                </div>
+            </div>
+        </div>
         <div class="form-group row" data-toggle="tooltip" title="@(userConfig.PureLine("H5563"))">
             <label class="col-form-label col-sm-3">@(userConfig.GetText("reqPriorities")):</label>
             <div class="col-sm-9">
@@ -207,6 +235,7 @@ else
     private StateMatrixConfigurationSnapshot? masterStateMatrix;
     private List<WfTaskType> availableTaskTypes { get; set; } = [];
     private Dictionary<WfTaskType, bool> taskTypesActiveDict = [];
+    private TicketFieldVisibilityConfig ticketFieldVisibilityConfig = new();
 
     private List<WfPriority> prioList = [];
     private int? selectedApiTicketInitialStateId;
@@ -226,6 +255,7 @@ else
             }
             selectedApiTicketInitialStateId = configData.ReqApiTicketInitialStateId >= 0 ? configData.ReqApiTicketInitialStateId : null;
             availableTaskTypes = System.Text.Json.JsonSerializer.Deserialize<List<WfTaskType>>(configData.ReqAvailableTaskTypes) ?? throw new JsonException("Config data could not be parsed.");
+            ticketFieldVisibilityConfig = TicketFieldVisibilityConfig.Parse(configData.ReqTicketFieldVisibility);
             taskTypesActiveDict = [];
             foreach(WfTaskType type in Enum.GetValues<WfTaskType>())
             {
@@ -274,6 +304,7 @@ else
                 }
                 configData.ReqAvailableTaskTypes = JsonSerializer.Serialize(availableTaskTypes);
                 configData.ReqPriorities = JsonSerializer.Serialize(prioList);
+                configData.ReqTicketFieldVisibility = ticketFieldVisibilityConfig.ToConfigValue();
                 await globalConfig.WriteToDatabase(configData, apiConnection);
                 DisplayMessageInUi(null, userConfig.GetText("change_default"), userConfig.GetText("U5301"), false);
             }

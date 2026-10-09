@@ -12,6 +12,7 @@ namespace FWO.Services.Workflow
         public bool AddTicketMode = false;
         public bool DisplayPromoteTicketMode = false;
         public bool DisplaySaveTicketMode = false;
+        public bool DisplayTicketCommentMode = false;
 
         // Tickets
 

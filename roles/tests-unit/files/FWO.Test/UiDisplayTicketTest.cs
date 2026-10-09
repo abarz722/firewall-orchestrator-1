@@ -151,6 +151,51 @@ namespace FWO.Test
         }
 
         [Test]
+        public void DisplayTicket_ReadsCombinedTicketFieldVisibilityConfig()
+        {
+            var userConfig = CreateUserConfig();
+            userConfig.ReqTicketFieldVisibility = new TicketFieldVisibilityConfig
+            {
+                ShowRequester = false,
+                ShowPriority = true,
+                ShowDeadline = false,
+                ShowReason = true
+            }.ToConfigValue();
+            WfHandler handler = new()
+            {
+                ActTicket = new WfTicket { Id = 10, Title = "Ticket" }
+            };
+            DisplayTicket component = CreateDisplayTicket(handler, WorkflowPhases.request, userConfig: userConfig);
+
+            TicketFieldVisibilityConfig visibility = GetMember<TicketFieldVisibilityConfig>(component, "TicketFieldVisibility");
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(visibility.ShowRequester, Is.False);
+                Assert.That(visibility.ShowPriority, Is.True);
+                Assert.That(visibility.ShowDeadline, Is.False);
+                Assert.That(visibility.ShowReason, Is.True);
+                Assert.That(visibility.ShowComments, Is.False);
+            });
+        }
+
+        [Test]
+        public async Task DisplayTicket_ConfAddComment_RerendersUpdatedComments()
+        {
+            await using BunitContext context = new();
+            WfHandler handler = new()
+            {
+                DisplayTicketMode = true,
+                ActTicket = new WfTicket { Id = 10, Title = "Ticket" }
+            };
+            IRenderedComponent<DisplayTicket> component = RenderDisplayTicket(context, handler, WorkflowPhases.approval, new WfStateDict());
+
+            await InvokePrivateTask(component.Instance, "ConfAddComment", "new ticket comment");
+
+            Assert.That(GetMember<string>(component.Instance, "allComments"), Does.Contain("new ticket comment"));
+        }
+
+        [Test]
         public void DisplayTicket_CheckPromoteTicketUsesAllowedMasterTransitions()
         {
             WfHandler handler = new()

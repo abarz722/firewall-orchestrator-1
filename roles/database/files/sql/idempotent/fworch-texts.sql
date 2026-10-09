@@ -579,6 +579,7 @@ INSERT INTO txt VALUES ('whats_new_facts',	    'German', 	'
     <li>Im Antragsmodul werden die Grunddaten eines Auftrags und seine Elemente nun in getrennten Bereichen bearbeitet; der Auftragstyp bleibt dabei in beiden Bereichen synchron. Wird nach dem Ansehen eines bestehenden Auftrags ein neuer angelegt, startet dieser nun mit dem richtigen Auftragstyp, und die Gateway-Auswahl bleibt bei "Alle" stabil.</li>
     <li>Die Bezeichnungen Objekt-Katalog und Service-Katalog wurden verdeutlicht.</li>
     <li>Die neuen Auftragstypen "Objekt anlegen" und "Objekt &auml;ndern" beantragen ein einzelnes Netzwerkobjekt (Host, Netz, Adressbereich) oder einen Service ohne Gruppe. Beim &Auml;ndern wird das bestehende Objekt &uuml;ber eine Suche ausgew&auml;hlt, der Auftrag zeigt alten und neuen Stand. Die Auftragstypen m&uuml;ssen in den Workflow-Anpassungen freigeschaltet werden und werden noch nicht an externe Ticketsysteme &uuml;bergeben; siehe <a target="_blank" href="/help/workflow/tasktypes">Hilfe zu Auftragstypen</a>.</li>
+    <li>Die Sichtbarkeit von Ticket-Antragsteller, Priorit&auml;t, Deadline, Grund und Kommentaren kann in den Workflow-Anpassungen unabh&auml;ngig eingestellt werden; Kommentare sind standardm&auml;&szlig;ig ausgeblendet.</li>
     <li>Details: siehe <a target="_blank" href="https://github.com/CactuseSecurity/firewall-orchestrator/releases">Release Notes.</a></li>
 </ul>
 ');
@@ -592,6 +593,7 @@ INSERT INTO txt VALUES ('whats_new_facts',	    'English', 	'
     <li>In the request module, the basic data of a task and its elements are now edited in separate sections, with the task type kept in sync between them. A task created after viewing an existing one now starts with the correct task type, and the gateway selection stays stable when "All" is selected.</li>
     <li>The Object Catalog and Service Catalog labels were clarified.</li>
     <li>The new task types "Create Object" and "Modify Object" request a single network object (host, network, address range) or service without a group. When modifying, the existing object is selected through a search and the task shows the old and the new state. The task types have to be enabled in the workflow customizing settings and are not yet passed to external ticket systems; see <a target="_blank" href="/help/workflow/tasktypes">task type help</a>.</li>
+    <li>The visibility of the ticket requester, priority, deadline, reason, and comments can be configured independently in Workflow Customizing; comments are hidden by default.</li>
     <li>Details: see <a target="_blank" href="https://github.com/CactuseSecurity/firewall-orchestrator/releases">release notes.</a></li>
 </ul>
 ');
@@ -2855,6 +2857,8 @@ INSERT INTO txt VALUES ('undefined',		    'German', 	'nicht definiert');
 INSERT INTO txt VALUES ('undefined',		    'English', 	'undefined');
 INSERT INTO txt VALUES ('reqAvailableTaskTypes','German', 	'Verf&uuml;gbare Auftragstypen');
 INSERT INTO txt VALUES ('reqAvailableTaskTypes','English', 	'Available Task Types');
+INSERT INTO txt VALUES ('reqTicketFieldVisibility','German', 	'Sichtbarkeit der Ticketfelder');
+INSERT INTO txt VALUES ('reqTicketFieldVisibility','English', 	'Ticket Field Visibility');
 INSERT INTO txt VALUES ('reqOwnerBased',        'German', 	'Eigent&uuml;merbasiert');
 INSERT INTO txt VALUES ('reqOwnerBased',        'English', 	'Owner based');
 INSERT INTO txt VALUES ('reqVisibilityBased',   'German', 	'Sichtbarkeit ber&uuml;cksichtigen');
@@ -7281,6 +7285,8 @@ INSERT INTO txt VALUES ('H5578', 'German',  'B&uuml;ndelung ber&uuml;cksichtigen
 INSERT INTO txt VALUES ('H5578', 'English', 'Consider bundling: When enabled, automatically created implementation tasks for request tasks with the same flow bundle id are created from one merged task. Tasks without a bundle id are still handled individually.');
 INSERT INTO txt VALUES ('H5579', 'German',  'Sichtbarkeit ber&uuml;cksichtigen: Aktiviert die Sichtbarkeitseinschr&auml;nkungen f&uuml;r den Workflow. Tickets, Auftr&auml;ge und Genehmigungen werden dann zus&auml;tzlich zu Rolle und Eigentum nach den zugeordneten Sichtbarkeitsgruppen gefiltert. Genehmigungen, die direkt an den eigenen Benutzer oder dessen Gruppe zugewiesen sind, bleiben ebenfalls sichtbar.');
 INSERT INTO txt VALUES ('H5579', 'English', 'Consider visibility: Activates workflow visibility restrictions. Tickets, tasks, and approvals are then filtered by their assigned visibility groups in addition to role and ownership checks. Approvals assigned directly to the current user or the user''s group stay visible as well.');
+INSERT INTO txt VALUES ('H5580', 'German',  'Sichtbarkeit der Ticketfelder: Legt fest, welche Felder im Ticketdialog angezeigt werden. Antragsteller, Priorit&auml;t, Deadline und Grund sind standardm&auml;&szlig;ig sichtbar; Kommentare sind standardm&auml;&szlig;ig ausgeblendet.');
+INSERT INTO txt VALUES ('H5580', 'English', 'Ticket field visibility: Defines which fields are displayed in the ticket dialog. Requester, priority, deadline, and reason are visible by default; comments are hidden by default.');
 INSERT INTO txt VALUES ('H5581', 'German',  'In diesem Abschnitt k&ouml;nnen die vorhandenen Eigent&uuml;mer eingesehen und administriert (falls in den <a href="/help/settings/workflowcustomizing">Einstellungen</a> aktiviert) werden.
     Die Eigent&uuml;merschaft muss Nutzern entweder direkt oder &uuml;ber Eigent&uuml;mergruppen zugeordnet werden.
     Es ist geplant, die Eigent&uuml;merschaft mit der Zust&auml;ndigkeit bei der Antragsstellung zu verkn&uuml;pfen.

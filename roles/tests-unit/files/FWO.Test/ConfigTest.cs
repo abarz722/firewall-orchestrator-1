@@ -573,6 +573,21 @@ namespace FWO.Test
         }
 
         [Test]
+        public void TicketFieldVisibilityConfig_DefaultsAllFieldsToVisible()
+        {
+            TicketFieldVisibilityConfig config = TicketFieldVisibilityConfig.Parse(null);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(config.ShowRequester, Is.True);
+                Assert.That(config.ShowPriority, Is.True);
+                Assert.That(config.ShowDeadline, Is.True);
+                Assert.That(config.ShowReason, Is.True);
+                Assert.That(config.ShowComments, Is.False);
+            });
+        }
+
+        [Test]
         public void ConfigData_DefaultsDesignatedZoneMatrixIdToZero()
         {
             ConfigData configData = new();

@@ -134,6 +134,42 @@ namespace FWO.Test
         }
 
         [Test]
+        public async Task Save_PersistsTicketFieldVisibilityAsOneJsonSetting()
+        {
+            SettingsCustomizing component = new();
+            WorkflowCustomizingApiConn apiConnection = new();
+            SimulatedGlobalConfig globalConfig = new()
+            {
+                ReqAvailableTaskTypes = "[]",
+                ReqPriorities = "[]"
+            };
+            SimulatedUserConfig userConfig = new();
+            ConfigData editableConfig = await globalConfig.GetEditableConfig();
+
+            SetMember(component, "apiConnection", apiConnection);
+            SetMember(component, "globalConfig", globalConfig);
+            SetMember(component, "userConfig", userConfig);
+            SetMember(component, "configData", editableConfig);
+            SetMember(component, "taskTypesActiveDict", Enum.GetValues<WfTaskType>().ToDictionary(type => type, _ => false));
+            SetMember(component, "prioList", new List<WfPriority>());
+            SetMember(component, "ticketFieldVisibilityConfig", new TicketFieldVisibilityConfig { ShowPriority = false });
+
+            Task saveTask = (Task)GetPrivateMethod(typeof(SettingsCustomizing), "Save").Invoke(component, [])!;
+            await saveTask;
+
+            ConfigItem setting = FindConfigItem(apiConnection.LastConfigItems, "reqTicketFieldVisibility");
+            TicketFieldVisibilityConfig stored = TicketFieldVisibilityConfig.Parse(setting.Value);
+            Assert.Multiple(() =>
+            {
+                Assert.That(stored.ShowRequester, Is.True);
+                Assert.That(stored.ShowPriority, Is.False);
+                Assert.That(stored.ShowDeadline, Is.True);
+                Assert.That(stored.ShowReason, Is.True);
+                Assert.That(stored.ShowComments, Is.False);
+            });
+        }
+
+        [Test]
         public async Task Save_PersistsApiTicketInitialStateId()
         {
             SettingsCustomizing component = new();
@@ -835,6 +871,11 @@ namespace FWO.Test
                 Assert.That(settings.Markup, Does.Contain("flow_integration"));
                 Assert.That(settings.Markup, Does.Contain("cbx_visibility_based"));
                 Assert.That(settings.Markup, Does.Contain("cbx_consider_bundling"));
+                Assert.That(settings.Markup, Does.Contain("cbx_show_ticket_requester"));
+                Assert.That(settings.Markup, Does.Contain("cbx_show_ticket_priority"));
+                Assert.That(settings.Markup, Does.Contain("cbx_show_ticket_deadline"));
+                Assert.That(settings.Markup, Does.Contain("cbx_show_ticket_reason"));
+                Assert.That(settings.Markup, Does.Contain("cbx_show_ticket_comments"));
                 Assert.That(flowIntegration.Instance.ConfigValue, Is.EqualTo(configValue));
             });
         }

@@ -258,6 +258,9 @@ namespace FWO.Config.Api.Data
         [JsonProperty("reqAvailableTaskTypes"), JsonPropertyName("reqAvailableTaskTypes")]
         public string ReqAvailableTaskTypes { get; set; } = "";
 
+        [JsonProperty("reqTicketFieldVisibility"), JsonPropertyName("reqTicketFieldVisibility")]
+        public string ReqTicketFieldVisibility { get; set; } = System.Text.Json.JsonSerializer.Serialize(new TicketFieldVisibilityConfig());
+
         [JsonProperty("reqOwnerBased"), JsonPropertyName("reqOwnerBased")]
         public bool ReqOwnerBased { get; set; } = false;
 

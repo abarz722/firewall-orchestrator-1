@@ -729,6 +729,109 @@ namespace FWO.Test
         }
 
         [Test]
+        public async Task EditActionGeneral_BundleTasks_OffersOnlyTicketScope()
+        {
+            EditActionGeneral component = new();
+            SetMember(component, "ActAction", new WfStateAction
+            {
+                ActionType = StateActionTypes.BundleTasks.ToString(),
+                Scope = WfObjectScopes.Ticket.ToString()
+            });
+
+            IEnumerable<string> scopes = GetMember<IEnumerable<string>>(component, "SelectableScopes");
+
+            Assert.That(scopes, Is.EqualTo(new List<string> { WfObjectScopes.Ticket.ToString() }));
+        }
+
+        [TestCase(StateActionTypes.DisplayConnection)]
+        [TestCase(StateActionTypes.TrafficPathAnalysis)]
+        public async Task EditActionGeneral_InteractiveActions_OfferOnlyButtonEvent(StateActionTypes actionType)
+        {
+            EditActionGeneral component = new();
+            SetMember(component, "ActAction", new WfStateAction
+            {
+                ActionType = actionType.ToString(),
+                Event = StateActionEvents.OfferButton.ToString()
+            });
+
+            IEnumerable<string> events = GetMember<IEnumerable<string>>(component, "SelectableEvents");
+
+            Assert.That(events, Is.EqualTo(new List<string> { StateActionEvents.OfferButton.ToString() }));
+        }
+
+        [Test]
+        public async Task EditActionGeneral_ActionTypeChange_NormalizesEventForInteractiveAction()
+        {
+            EditActionGeneral component = new();
+            WfStateAction action = new()
+            {
+                ActionType = StateActionTypes.SetAlert.ToString(),
+                Event = StateActionEvents.OnSet.ToString()
+            };
+            SetMember(component, "ActAction", action);
+            SetMember(component, "ActionTypeChanged", EventCallback.Factory.Create<string?>(new object(),
+                actionType => action.ActionType = actionType ?? ""));
+
+            await InvokeAsync(component, "OnActionTypeChanged", StateActionTypes.DisplayConnection.ToString());
+
+            Assert.That(action.Event, Is.EqualTo(StateActionEvents.OfferButton.ToString()));
+        }
+
+        [TestCase(StateActionTypes.UpdateConnectionOwner)]
+        [TestCase(StateActionTypes.UpdateConnectionRelease)]
+        [TestCase(StateActionTypes.UpdateConnectionReject)]
+        public async Task EditActionGeneral_ConnectionActions_OfferOnlyTicketScope(StateActionTypes actionType)
+        {
+            EditActionGeneral component = new();
+            SetMember(component, "ActAction", new WfStateAction
+            {
+                ActionType = actionType.ToString(),
+                Scope = WfObjectScopes.Ticket.ToString()
+            });
+
+            IEnumerable<string> scopes = GetMember<IEnumerable<string>>(component, "SelectableScopes");
+
+            Assert.That(scopes, Is.EqualTo(new List<string> { WfObjectScopes.Ticket.ToString() }));
+        }
+
+        [Test]
+        public async Task EditActionGeneral_ExistingInvalidScope_RemainsVisibleForEditing()
+        {
+            EditActionGeneral component = new();
+            SetMember(component, "ActAction", new WfStateAction
+            {
+                ActionType = StateActionTypes.BundleTasks.ToString(),
+                Scope = WfObjectScopes.Approval.ToString()
+            });
+
+            IEnumerable<string> scopes = GetMember<IEnumerable<string>>(component, "SelectableScopes");
+
+            Assert.That(scopes, Is.EqualTo(new List<string>
+            {
+                WfObjectScopes.Approval.ToString(),
+                WfObjectScopes.Ticket.ToString()
+            }));
+        }
+
+        [Test]
+        public async Task EditActionGeneral_ActionTypeChange_NormalizesScopeAfterParentUpdate()
+        {
+            EditActionGeneral component = new();
+            WfStateAction action = new()
+            {
+                ActionType = StateActionTypes.SetAlert.ToString(),
+                Scope = WfObjectScopes.Approval.ToString()
+            };
+            SetMember(component, "ActAction", action);
+            SetMember(component, "ActionTypeChanged", EventCallback.Factory.Create<string?>(new object(),
+                actionType => action.ActionType = actionType ?? ""));
+
+            await InvokeAsync(component, "OnActionTypeChanged", StateActionTypes.BundleTasks.ToString());
+
+            Assert.That(action.Scope, Is.EqualTo(WfObjectScopes.Ticket.ToString()));
+        }
+
+        [Test]
         public async Task EditActionGeneral_OnPhaseChanged_UpdatesAction()
         {
             EditActionGeneral component = new();
