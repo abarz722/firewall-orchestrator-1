@@ -641,7 +641,9 @@ namespace FWO.Test
         {
             public List<string> Queries { get; } = [];
             public List<FlowNwObject> FlowNwObjects { get; set; } = [];
+            public List<FlowNwGroup> FlowNwGroups { get; set; } = [];
             public List<FlowSvcObject> FlowSvcObjects { get; set; } = [];
+            public List<FlowSvcGroup> FlowSvcGroups { get; set; } = [];
             public List<FlowTimeObject> FlowTimeObjects { get; set; } = [];
             public List<Management> Managements { get; set; } = [];
 
@@ -668,9 +670,17 @@ namespace FWO.Test
                 {
                     return Task.FromResult((QueryResponseType)(object)FlowNwObjects);
                 }
+                if (query == FlowQueries.getFlowAddressGroups)
+                {
+                    return Task.FromResult((QueryResponseType)(object)FlowNwGroups);
+                }
                 if (query == FlowQueries.getFlowRequestSvcObjectCatalog)
                 {
                     return Task.FromResult((QueryResponseType)(object)FlowSvcObjects);
+                }
+                if (query == FlowQueries.getFlowServiceGroups)
+                {
+                    return Task.FromResult((QueryResponseType)(object)FlowSvcGroups);
                 }
                 if (query == FlowQueries.getFlowRequestTimeObjectCatalog)
                 {

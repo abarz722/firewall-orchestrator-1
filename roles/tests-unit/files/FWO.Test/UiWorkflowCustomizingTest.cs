@@ -907,7 +907,7 @@ namespace FWO.Test
                 Assert.That(dropdowns[1].Instance.SelectedElement, Is.EqualTo(FlowIntegrationObjectSelectionOptions.Manually));
                 Assert.That(dropdowns[2].Instance.SelectedElement, Is.EqualTo(FlowIntegrationObjectSelectionOptions.Both));
                 Assert.That(dropdowns[3].Instance.SelectedElement, Is.EqualTo(FlowIntegrationTimePrecisionOptions.Minutes));
-                Assert.That(dropdowns[0].Instance.ElementToString(FlowIntegrationObjectSelectionOptions.FromFlowDb), Is.EqualTo("FromFlowDb"));
+                Assert.That(dropdowns[0].Instance.ElementToString(FlowIntegrationObjectSelectionOptions.FromFlowDb), Is.EqualTo("from Flow DB"));
                 Assert.That(dropdowns[3].Instance.ElementToString(FlowIntegrationTimePrecisionOptions.Hours), Is.EqualTo("hours"));
             });
         }
