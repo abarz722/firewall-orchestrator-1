@@ -51,7 +51,6 @@ internal sealed class WorkflowTicketBuilder
             StateId = ticketStateId,
             Requester = BuildRequester(requesterId),
             AdditionalInfo = BuildTicketAdditionalInfo(request),
-            Reason = BuildRequestReason(request),
             Locked = true,
             Tasks = tasks
         };
@@ -66,11 +65,6 @@ internal sealed class WorkflowTicketBuilder
         {
             DbId = requesterId
         };
-    }
-
-    private static string BuildRequestReason(CreateTicketRequest request)
-    {
-        return $"{request.RuleContactName} ({request.RuleContactId})";
     }
 
     private static string BuildTicketAdditionalInfo(CreateTicketRequest request)

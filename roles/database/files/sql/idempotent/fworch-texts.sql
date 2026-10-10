@@ -571,14 +571,6 @@ INSERT INTO txt VALUES ('whats_new_in_version',	'German', 	'Was ist neu in Firew
 INSERT INTO txt VALUES ('whats_new_in_version',	'English', 	'Release notes Firewall Orchestrator version');
 INSERT INTO txt VALUES ('whats_new_facts', 'German', '
 <ul>
-    <li>Im Regeln-Report k&ouml;nnen nun statt Gateways die Start-Regelwerke eines Managements ausgew&auml;hlt werden, auch Regelwerke ohne Gateway-Verkn&uuml;pfung. Der Report enth&auml;lt jedes ausgew&auml;hlte Regelwerk mit den darauf folgenden Layern und Sections.</li>
-    <li>Die Standard-Regelansicht (Gateway oder Management) kann global und pers&ouml;nlich eingestellt werden. Die pers&ouml;nliche Einstellung hat Vorrang; gespeicherte Report-Vorlagen behalten ihre Ansicht. Der globale Standard ist Gateway-basiert.</li>
-    <li>Der Job-Scheduler der Middleware wurde auf Quartz.NET 4.3 aktualisiert, zusammen mit aktualisierten Bibliotheken unter anderem f&uuml;r E-Mail-Versand und PDF-Erzeugung.</li>
-    <li>Beim Stoppen der Middleware werden laufende geplante Jobs nun abgebrochen, statt auf ihr Ende zu warten. Jeder Job h&auml;lt am n&auml;chsten sicheren Punkt an und hinterl&auml;sst keine halbfertigen Ergebnisse: ein abgebrochener Report wird weder archiviert noch versendet, ein unterbrochener App-Daten-Import wird als nicht erfolgreich abgeschlossen und deaktiviert keine noch nicht verarbeiteten Apps, und eine unterbrochene automatische Ger&auml;teerkennung meldet noch nicht gepr&uuml;fte Managements nicht als gel&ouml;scht.</li>
-    <li>Die Jobs haben beim Herunterfahren bis zu 2 Minuten Zeit, sich zu beenden; die systemd-Unit fworch-middleware wartet daf&uuml;r nun bis zu 180 Sekunden, bevor sie den Prozess beendet.</li>
-    <li>Im Antragsmodul werden die Grunddaten eines Auftrags und seine Elemente nun in getrennten Bereichen bearbeitet; der Auftragstyp bleibt dabei in beiden Bereichen synchron. Wird nach dem Ansehen eines bestehenden Auftrags ein neuer angelegt, startet dieser nun mit dem richtigen Auftragstyp, und die Gateway-Auswahl bleibt bei "Alle" stabil.</li>
-    <li>Die Bezeichnungen Objekt-Katalog und Service-Katalog wurden verdeutlicht.</li>
-    <li>Die neuen Auftragstypen "Objekt anlegen" und "Objekt &auml;ndern" beantragen ein einzelnes Netzwerkobjekt (Host, Netz, Adressbereich) oder einen Service ohne Gruppe. Beim &Auml;ndern wird das bestehende Objekt &uuml;ber eine Suche ausgew&auml;hlt, der Auftrag zeigt alten und neuen Stand. Die Auftragstypen m&uuml;ssen in den Workflow-Anpassungen freigeschaltet werden und werden noch nicht an externe Ticketsysteme &uuml;bergeben; siehe <a target="_blank" href="/help/workflow/tasktypes">Hilfe zu Auftragstypen</a>.</li>
     <li>Die Sichtbarkeit von Ticket-Antragsteller, Priorit&auml;t, Deadline, Grund und Kommentaren kann in den Workflow-Anpassungen unabh&auml;ngig eingestellt werden; Kommentare sind standardm&auml;&szlig;ig ausgeblendet.</li>
     <li>Importierte Logdaten zeigen f&uuml;r Quell- und Zieladressen die zugeh&ouml;rigen externen App-IDs, Netzwerk-Areas und Reverse-DNS-Namen. DNS-Ergebnisse werden wiederverwendet; neue Lookups k&ouml;nnen unter Einstellungen - Logging deaktiviert werden.</li>
     <li>Die Logdaten-Tabelle zeigt den Aggregationszeitraum und Importzeitpunkt der angezeigten Daten. Bei unterschiedlichen oder unbekannten Zeitr&auml;umen erscheinen diese Angaben pro Zeile. Der Standardzeitraum ist unter Einstellungen - Logging einstellbar (7 Tage) und kann von JSON-Importdateien &uuml;berschrieben werden. Die Spalte Zeitpunkt ist standardm&auml;&szlig;ig ausgeblendet. Die &Uuml;berschrift nennt das Ende des Zeitraums und zeigt standardm&auml;&szlig;ig nur das Importdatum; die Uhrzeit des Imports kann unter Einstellungen - Logging aktiviert werden.</li>
@@ -588,14 +580,6 @@ INSERT INTO txt VALUES ('whats_new_facts', 'German', '
 ');
 INSERT INTO txt VALUES ('whats_new_facts', 'English', '
 <ul>
-    <li>The Rules report can now select the start rulebases of a management instead of gateways, including rulebases without a gateway link. The report contains each selected rulebase with the layers and sections following it.</li>
-    <li>The default rules view (gateway or management) can be configured globally and personally. Personal settings take precedence; saved report templates retain their view. The global default is gateway-based.</li>
-    <li>The middleware job scheduler was upgraded to Quartz.NET 4.3, together with updated libraries for, among others, email delivery and PDF generation.</li>
-    <li>Stopping the middleware now cancels running scheduled jobs instead of waiting for them to finish. Each job stops at its next safe point and leaves no half-done result behind: a cancelled report is neither archived nor sent, an interrupted app data import is closed as unsuccessful and does not deactivate the apps it has not reached, and an interrupted device auto discovery does not report the managements it has not reached as deleted.</li>
-    <li>Jobs get up to 2 minutes to unwind on shutdown; the systemd unit fworch-middleware now waits up to 180 seconds before stopping the process.</li>
-    <li>In the request module, the basic data of a task and its elements are now edited in separate sections, with the task type kept in sync between them. A task created after viewing an existing one now starts with the correct task type, and the gateway selection stays stable when "All" is selected.</li>
-    <li>The Object Catalog and Service Catalog labels were clarified.</li>
-    <li>The new task types "Create Object" and "Modify Object" request a single network object (host, network, address range) or service without a group. When modifying, the existing object is selected through a search and the task shows the old and the new state. The task types have to be enabled in the workflow customizing settings and are not yet passed to external ticket systems; see <a target="_blank" href="/help/workflow/tasktypes">task type help</a>.</li>
     <li>The visibility of the ticket requester, priority, deadline, reason, and comments can be configured independently in Workflow Customizing; comments are hidden by default.</li>
     <li>Imported log data shows matching external application IDs, network areas, and reverse-DNS names for source and destination addresses. DNS results are reused; new lookups can be disabled under Settings - Logging.</li>
     <li>The log data table shows the aggregation period and import time of the displayed data. When periods differ or are unknown, these values appear per row. The default period is configurable under Settings - Logging (7 days) and can be overridden by JSON import files. The log time column is hidden by default. The heading names the end of the period and shows only the import date by default; the time of the import can be enabled under Settings - Logging.</li>
@@ -4028,8 +4012,8 @@ INSERT INTO txt VALUES ('scheduler_action', 	          'German',   'Aktion');
 INSERT INTO txt VALUES ('scheduler_action', 	          'English',  'Action');
 INSERT INTO txt VALUES ('scheduler_no_jobs', 	          'German',   'Keine Scheduler-Jobs verf&uuml;gbar.');
 INSERT INTO txt VALUES ('scheduler_no_jobs', 	          'English',  'No scheduler jobs available.');
-INSERT INTO txt VALUES ('scheduler_starting', 	          'German',   'Startet baldâ€¦');
-INSERT INTO txt VALUES ('scheduler_starting', 	          'English',  'Starting soonâ€¦');
+INSERT INTO txt VALUES ('scheduler_starting', 	          'German',   'Startet bald…');
+INSERT INTO txt VALUES ('scheduler_starting', 	          'English',  'Starting soon…');
 INSERT INTO txt VALUES ('scheduler_start_now', 	          'German',   'Jetzt starten');
 INSERT INTO txt VALUES ('scheduler_start_now', 	          'English',  'Start now');
 INSERT INTO txt VALUES ('scheduler_now', 	              'German',   'Jetzt');
@@ -7856,8 +7840,8 @@ INSERT INTO txt VALUES ('H5819', 'German',  'Wenn aktiviert, wird bei &Auml;nder
 INSERT INTO txt VALUES ('H5819', 'English', 'When enabled, changes to network matrices automatically add an "Undefined Internal Zone" that includes all address ranges not defined in other zones and excluded from the Internet zone.');
 INSERT INTO txt VALUES ('H5820', 'German',  'Teilbereich des privaten Adressbereichs gem&auml;&szlig; RFC 1918');
 INSERT INTO txt VALUES ('H5820', 'English', 'Part of the private address range according to RFC 1918');
-INSERT INTO txt VALUES ('H5821', 'German',  'Spezialbereich f&uuml;r â€ždieseâ€œ Netzwerke, Quelle unbekannt (unspezifische Adresse).');
-INSERT INTO txt VALUES ('H5821', 'English', 'Special range for â€œthisâ€ network, used as an unspecified address.');
+INSERT INTO txt VALUES ('H5821', 'German',  'Spezialbereich f&uuml;r „diese“ Netzwerke, Quelle unbekannt (unspezifische Adresse).');
+INSERT INTO txt VALUES ('H5821', 'English', 'Special range for “this” network, used as an unspecified address.');
 INSERT INTO txt VALUES ('H5822', 'German',  'Loopback-Adressbereich zur internen Kommunikation eines Hosts.');
 INSERT INTO txt VALUES ('H5822', 'English', 'Loopback address range for internal host communication.');
 INSERT INTO txt VALUES ('H5823', 'German',  'Link-Local-Adressbereich f&uuml;r automatische Adressvergabe ohne DHCP.');
@@ -8526,7 +8510,7 @@ INSERT INTO txt VALUES ('H7271', 'German', 'Zuordnungen, die dieser Lauf angeleg
 INSERT INTO txt VALUES ('H7271', 'English', 'Mappings this run created because they did not exist before. The running update should have created them.');
 INSERT INTO txt VALUES ('H7272', 'German', 'Zuordnungen, die dieser Lauf entfernt hat, weil sie nicht mehr zutreffen. Die laufende Aktualisierung h&auml;tte sie abr&auml;umen m&uuml;ssen.');
 INSERT INTO txt VALUES ('H7272', 'English', 'Mappings this run removed because they no longer apply. The running update should have cleared them.');
-INSERT INTO txt VALUES ('H7273', 'German', 'Importe, die zu Beginn des Laufs noch nicht verarbeitet waren. Sind hier Nummern eingetragen, erkl&auml;rt der RÃ¼ckstand den Unterschied und der Lauf sagt nichts &uuml;ber die Qualit&auml;t der laufenden Aktualisierung.');
+INSERT INTO txt VALUES ('H7273', 'German', 'Importe, die zu Beginn des Laufs noch nicht verarbeitet waren. Sind hier Nummern eingetragen, erkl&auml;rt der R&uuml;ckstand den Unterschied und der Lauf sagt nichts &uuml;ber die Qualit&auml;t der laufenden Aktualisierung.');
 INSERT INTO txt VALUES ('H7273', 'English', 'Imports that had not been processed when the run started. If numbers are listed here, the backlog explains the difference and the run says nothing about the quality of the running update.');
 INSERT INTO txt VALUES ('H7274', 'German', 'Was vor diesem Lauf ge&auml;ndert wurde. Deshalb weicht das Ergebnis bewusst vom vorherigen Stand ab, und der Unterschied wird nicht als Problem gemeldet.');
 INSERT INTO txt VALUES ('H7274', 'English', 'What was changed before this run. That is why the result deliberately differs from the previous state, and the difference is not reported as a problem.');
