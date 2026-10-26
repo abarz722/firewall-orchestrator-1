@@ -65,8 +65,19 @@
         {
             <Column TableItem="WfTicket" Title="@(userConfig.GetText("deadline"))" Field="@(x => x.Deadline)" Sortable="true" Filterable="true" />
         }
+        @if (TicketFieldVisibility.HandlerDisplayMode != TicketHandlerDisplayMode.None)
+        {
+            <Column TableItem="WfTicket" Title="@(userConfig.GetText("current_handlers"))" Field="@(x => x.Id)" Sortable="false" Filterable="false">
+                <Template>
+                    @(DisplayHandlers(context))
+                </Template>
+            </Column>
+        }
         <Column TableItem="WfTicket" Title="@(userConfig.GetText("created"))" Field="@(x => x.CreationDate)" Sortable="true" Filterable="true" />
-        <Column TableItem="WfTicket" Title="@(userConfig.GetText("closed"))" Field="@(x => x.CompletionDate)" Sortable="true" Filterable="true" />
+        @if (Overview)
+        {
+            <Column TableItem="WfTicket" Title="@(userConfig.GetText("closed"))" Field="@(x => x.CompletionDate)" Sortable="true" Filterable="true" />
+        }
     </Table>
 </div>
 
@@ -127,6 +138,63 @@
     }
 
     private TicketFieldVisibilityConfig TicketFieldVisibility => TicketFieldVisibilityConfig.Parse(userConfig.ReqTicketFieldVisibility);
+
+    private string DisplayHandlers(WfTicket ticket)
+    {
+        IEnumerable<UiUser?> handlers = TicketFieldVisibility.HandlerDisplayMode == TicketHandlerDisplayMode.CurrentPhase
+            ? GetCurrentPhaseHandlers(ticket)
+            : GetAllActiveTaskHandlers(ticket);
+
+        return string.Join(", ", handlers
+            .Where(handler => handler != null)
+            .GroupBy(HandlerKey)
+            .Select(group => group.First()!.Name)
+            .Where(name => !string.IsNullOrWhiteSpace(name)));
+    }
+
+    private IEnumerable<UiUser?> GetCurrentPhaseHandlers(WfTicket ticket)
+    {
+        foreach (WfReqTask task in ticket.Tasks.Where(IsInCurrentPhase))
+        {
+            if (Phase < WorkflowPhases.implementation)
+            {
+                yield return task.CurrentHandler;
+            }
+            else
+            {
+                foreach (WfImplTask implTask in task.ImplementationTasks.Where(IsInCurrentPhase))
+                {
+                    yield return implTask.CurrentHandler;
+                }
+            }
+        }
+    }
+
+    private IEnumerable<UiUser?> GetAllActiveTaskHandlers(WfTicket ticket)
+    {
+        foreach (WfReqTask task in ticket.Tasks.Where(task => task.StateId < WfHandler.MasterStateMatrix.MinTicketCompleted))
+        {
+            yield return task.CurrentHandler;
+            foreach (WfImplTask implTask in task.ImplementationTasks)
+            {
+                yield return implTask.CurrentHandler;
+            }
+        }
+    }
+
+    private bool IsInCurrentPhase(WfStatefulObject statefulObject)
+    {
+        StateMatrix matrix = WfHandler.StateMatrix(
+            statefulObject is WfReqTask task ? task.TaskType : ((WfImplTask)statefulObject).TaskType);
+        return statefulObject.StateId >= matrix.LowestInputState && statefulObject.StateId < matrix.LowestEndState;
+    }
+
+    private static string HandlerKey(UiUser? handler)
+    {
+        return handler?.DbId > 0
+            ? $"id:{handler.DbId}"
+            : $"dn:{handler?.Dn ?? handler?.Name ?? ""}";
+    }
 
     /// <summary>
     /// Checks whether the dialogs for changing tickets are offered: on a phase page also to read-only users,

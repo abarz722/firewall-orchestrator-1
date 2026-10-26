@@ -726,6 +726,54 @@ namespace FWO.Test
         }
 
         [Test]
+        public async Task StartWorkOnReqTask_PromotesAllBundledTasks()
+        {
+            StateMatrix matrix = new()
+            {
+                LowestInputState = 0,
+                LowestStartedState = 2,
+                LowestEndState = 5,
+                Matrix = new Dictionary<int, List<int>> { [0] = [2] }
+            };
+            WfReqTask firstTask = new()
+            {
+                Id = 7,
+                TicketId = 1,
+                TaskType = WfTaskType.access.ToString(),
+                StateId = 0
+            };
+            WfReqTask secondTask = new()
+            {
+                Id = 8,
+                TicketId = 1,
+                TaskType = WfTaskType.access.ToString(),
+                StateId = 0
+            };
+            firstTask.SetAddInfo(AdditionalInfoKeys.FlowBundleId, "bundle-7-8");
+            secondTask.SetAddInfo(AdditionalInfoKeys.FlowBundleId, "bundle-7-8");
+            WfTicket ticket = new() { Id = 1, Tasks = [firstTask, secondTask] };
+            WfHandler handler = new()
+            {
+                ActTicket = ticket,
+                ActStateMatrix = matrix,
+                MasterStateMatrix = matrix,
+                Phase = WorkflowPhases.planning,
+                userConfig = new SimulatedUserConfig { ReqConsiderBundling = true }
+            };
+            SetMatrix(handler, WfTaskType.access.ToString(), matrix);
+            handler.TicketList.Add(ticket);
+
+            await handler.StartWorkOnReqTask(firstTask, ObjAction.plan);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(ticket.Tasks.Select(task => task.StateId), Is.EqualTo(kPromotedTaskStates));
+                Assert.That(ticket.Tasks.All(task => task.Start != null), Is.True);
+                Assert.That(ticket.Tasks.All(task => task.CurrentHandler == handler.userConfig.User), Is.True);
+            });
+        }
+
+        [Test]
         public async Task AutoPromote_ImplTaskScope_UpdatesStateAndHandler()
         {
             WfHandler handler = new();

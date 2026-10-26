@@ -244,6 +244,10 @@ namespace FWO.Services.Workflow
             {
                 bundledTask.StateId = targetStateId;
                 bundledTask.CurrentHandler = currentHandler;
+                if (bundledTask.Start == null && ActReqTask.Start != null)
+                {
+                    bundledTask.Start = ActReqTask.Start;
+                }
                 if (dbAcc != null)
                 {
                     StateMatrix bundledTaskMatrix = stateMatrixDict.Matrices[bundledTask.TaskType];

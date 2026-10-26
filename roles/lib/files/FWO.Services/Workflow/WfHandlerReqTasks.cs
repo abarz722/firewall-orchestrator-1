@@ -247,7 +247,12 @@ namespace FWO.Services.Workflow
                     }
                 }
             }
+            if (ActReqTask.Start == null && ActReqTask.StateId >= ActStateMatrix.LowestStartedState)
+            {
+                ActReqTask.Start = DateTime.Now;
+            }
             await UpdateActReqTaskState();
+            await PromoteLaggingBundledRequestTasks(ActReqTask.StateId, ActReqTask.CurrentHandler);
             await UpdateActTicketStateFromReqTasks();
             SetReqTaskMode(action);
         }

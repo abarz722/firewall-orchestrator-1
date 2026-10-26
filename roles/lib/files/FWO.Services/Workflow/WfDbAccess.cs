@@ -44,11 +44,15 @@ namespace FWO.Services.Workflow
                 }
                 else if (stateMatrix.VisibilityMode == PhaseVisibilityMode.TicketState)
                 {
-                    ticketQuery = RequestQueries.getTicketsByTicketState;
+                    ticketQuery = HasTicketHandlerDisplayEnabled()
+                        ? RequestQueries.getTicketsWithHandlersByTicketState
+                        : RequestQueries.getTicketsByTicketState;
                 }
                 else
                 {
-                    ticketQuery = RequestQueries.getTickets;
+                    ticketQuery = HasTicketHandlerDisplayEnabled()
+                        ? RequestQueries.getTicketsWithHandlers
+                        : RequestQueries.getTickets;
                 }
 
                 tickets = await ApiConnection.SendQueryAsync<List<WfTicket>>(
@@ -66,6 +70,13 @@ namespace FWO.Services.Workflow
                 DisplayMessageInUi(exception, UserConfig.GetText("fetch_requests"), "", true);
             }
             return tickets;
+        }
+
+        private bool HasTicketHandlerDisplayEnabled()
+        {
+            return IsUiContext
+                && TicketFieldVisibilityConfig.Parse(UserConfig.ReqTicketFieldVisibility).HandlerDisplayMode
+                    != TicketHandlerDisplayMode.None;
         }
 
         public async Task<WfTicket?> FetchTicket(long ticketId, List<int>? ownerIds = null, Func<WfTicket, bool>? ticketFilter = null)
