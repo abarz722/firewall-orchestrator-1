@@ -259,6 +259,12 @@ namespace FWO.Data.Workflow
                 new(WorkflowEditableFieldKeys.Name),
                 new(WorkflowEditableFieldKeys.Reason)
             ],
+            [WfTaskType.group_modify] =
+            [
+                new(WorkflowEditableFieldKeys.Title),
+                new(WorkflowEditableFieldKeys.Management),
+                new(WorkflowEditableFieldKeys.Reason)
+            ],
             // the object itself, its name included, is part of the element and stays with the requester
             [WfTaskType.object_create] =
             [

@@ -393,6 +393,116 @@ namespace FWO.Test
         }
 
         [Test]
+        public async Task DisplayTaskTargetDates_ChangingDateClearsSelectedFlowTimeObject()
+        {
+            DateTime? targetEndDate = new DateTime(2026, 8, 1, 17, 0, 0);
+            FlowTimeObject timeObject = new()
+            {
+                Id = 303,
+                Name = "Business Hours",
+                StartTime = new DateTime(2026, 8, 1, 8, 0, 0),
+                EndTime = targetEndDate,
+                ShowInRequestModule = true
+            };
+
+            await using BunitContext context = new();
+            context.Services.AddSingleton<ApiConnection>(new UiRequestWorkflowTest.RequestWorkflowApiConn());
+            context.Services.AddSingleton<UserConfig>(new UiRequestWorkflowTest.RequestWorkflowUserConfig
+            {
+                ReqUseFlowDb = true,
+                ReqFlowIntegration = new FlowIntegrationConfig
+                {
+                    SelectTimeObjects = FlowIntegrationObjectSelectionOptions.Both
+                }.ToConfigValue()
+            });
+            context.Services.AddSingleton<DomEventService>();
+            IRenderedComponent<DisplayTaskTargetDates> component = context.Render<DisplayTaskTargetDates>(parameters => parameters
+                .Add(p => p.TargetEndDate, targetEndDate)
+                .Add(p => p.TargetEndDateChanged, EventCallback.Factory.Create<DateTime?>(this, value => targetEndDate = value))
+                .Add(p => p.CanEditTargetEndDate, true));
+            SetMember(component.Instance, "selectedFlowTimeObjectInt", timeObject);
+            await component.Find("input[type=date]").InputAsync(new ChangeEventArgs { Value = "2026-08-02" });
+            IRenderedComponent<Dropdown<FlowTimeObject>> refreshedDropdown = component.FindComponent<Dropdown<FlowTimeObject>>();
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(GetMember<FlowTimeObject?>(component.Instance, "selectedFlowTimeObjectInt"), Is.Null);
+                Assert.That(refreshedDropdown.Instance.SelectedElement, Is.Null);
+                Assert.That(refreshedDropdown.Find("input").GetAttribute("value"), Is.Empty);
+            });
+
+            SetMember(component.Instance, "selectedFlowTimeObjectInt", timeObject);
+            component.Find("input[type=date]").Change(new ChangeEventArgs { Value = "2026-08-03" });
+            Assert.That(component.FindComponent<Dropdown<FlowTimeObject>>().Find("input").GetAttribute("value"), Is.Empty);
+        }
+
+        [Test]
+        public async Task DisplayTaskTargetDates_ChangingBeginDateClearsSelectedFlowTimeObject()
+        {
+            DateTime? targetBeginDate = new DateTime(2026, 8, 1, 8, 0, 0);
+            DateTime? targetEndDate = new DateTime(2026, 8, 1, 17, 0, 0);
+            FlowTimeObject timeObject = new()
+            {
+                Id = 304,
+                Name = "Business Hours",
+                StartTime = targetBeginDate,
+                EndTime = targetEndDate,
+                ShowInRequestModule = true
+            };
+
+            await using BunitContext context = new();
+            context.Services.AddSingleton<ApiConnection>(new UiRequestWorkflowTest.RequestWorkflowApiConn());
+            context.Services.AddSingleton<UserConfig>(new UiRequestWorkflowTest.RequestWorkflowUserConfig
+            {
+                ReqUseFlowDb = true,
+                ReqFlowIntegration = new FlowIntegrationConfig
+                {
+                    SelectTimeObjects = FlowIntegrationObjectSelectionOptions.Both
+                }.ToConfigValue()
+            });
+            context.Services.AddSingleton<DomEventService>();
+            IRenderedComponent<DisplayTaskTargetDates> component = context.Render<DisplayTaskTargetDates>(parameters => parameters
+                .Add(p => p.TargetBeginDate, targetBeginDate)
+                .Add(p => p.TargetBeginDateChanged, EventCallback.Factory.Create<DateTime?>(this, value => targetBeginDate = value))
+                .Add(p => p.TargetEndDate, targetEndDate)
+                .Add(p => p.TargetEndDateChanged, EventCallback.Factory.Create<DateTime?>(this, value => targetEndDate = value))
+                .Add(p => p.CanEditTargetBeginDate, true)
+                .Add(p => p.CanEditTargetEndDate, true));
+
+            SetMember(component.Instance, "selectedFlowTimeObjectInt", timeObject);
+            await component.FindAll("input[type=date]")[0].InputAsync(new ChangeEventArgs { Value = "2026-08-02" });
+
+            IRenderedComponent<Dropdown<FlowTimeObject>> refreshedDropdown = component.FindComponent<Dropdown<FlowTimeObject>>();
+            Assert.Multiple(() =>
+            {
+                Assert.That(targetBeginDate, Is.EqualTo(new DateTime(2026, 8, 2, 8, 0, 0)));
+                Assert.That(GetMember<FlowTimeObject?>(component.Instance, "selectedFlowTimeObjectInt"), Is.Null);
+                Assert.That(refreshedDropdown.Instance.SelectedElement, Is.Null);
+                Assert.That(refreshedDropdown.Find("input").GetAttribute("value"), Is.Empty);
+            });
+        }
+
+        [Test]
+        public async Task DisplayTaskTargetDates_DateAndTimeInputsCanWrap()
+        {
+            await using BunitContext context = new();
+            context.Services.AddSingleton<ApiConnection>(new UiRequestWorkflowTest.RequestWorkflowApiConn());
+            context.Services.AddSingleton<UserConfig>(new UiRequestWorkflowTest.RequestWorkflowUserConfig
+            {
+                ReqFlowIntegration = new FlowIntegrationConfig
+                {
+                    TimeObjectPrecision = FlowIntegrationTimePrecisionOptions.Seconds
+                }.ToConfigValue()
+            });
+
+            IRenderedComponent<DisplayTaskTargetDates> component = context.Render<DisplayTaskTargetDates>(parameters => parameters
+                .Add(p => p.CanEditTargetBeginDate, true)
+                .Add(p => p.CanEditTargetEndDate, true));
+
+            Assert.That(component.Markup, Does.Contain("d-flex flex-wrap gap-1"));
+        }
+
+        [Test]
         public void DisplayTaskTargetDates_SafeFormattersReturnStableFallbackValues()
         {
             Type componentType = typeof(DisplayTaskTargetDates);

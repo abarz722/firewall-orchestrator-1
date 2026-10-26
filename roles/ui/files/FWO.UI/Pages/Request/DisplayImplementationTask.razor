@@ -103,7 +103,8 @@
                             </div>
                         </div>
                     }
-                    else if(WfHandler.ActImplTask.TaskType == WfTaskType.group_create.ToString())
+                    else if(WfHandler.ActImplTask.TaskType == WfTaskType.group_create.ToString()
+                        || WfHandler.ActImplTask.TaskType == WfTaskType.group_modify.ToString())
                     {
                         <div class="col-sm-6">
                             <div class="form-group row">
@@ -179,7 +180,8 @@
                 {
                     <DisplayRules @bind-Rules="actRules" TaskId="WfHandler.ActImplTask.Id" EditMode="WfHandler.EditImplTaskMode" />
                 }
-                else if(WfHandler.ActImplTask.TaskType == WfTaskType.group_create.ToString())
+                else if(WfHandler.ActImplTask.TaskType == WfTaskType.group_create.ToString()
+                    || WfHandler.ActImplTask.TaskType == WfTaskType.group_modify.ToString())
                 {
                     <div class="col-sm-4 mt-2">
                         @if (WfHandler.EditImplTaskMode)

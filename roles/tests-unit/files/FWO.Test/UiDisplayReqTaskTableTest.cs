@@ -411,6 +411,35 @@ namespace FWO.Test
         }
 
         [Test]
+        public async Task DisplayReqTaskTable_ApprovalPhaseHidesApprovalDeadlineWhenDeadlineFieldIsDisabled()
+        {
+            await using BunitContext context = new();
+            context.Services.AddSingleton<UserConfig>(new RequestWorkflowUserConfig
+            {
+                ReqTicketFieldVisibility = new TicketFieldVisibilityConfig { ShowDeadline = false }.ToConfigValue()
+            });
+            WfReqTask reqTask = new()
+            {
+                Id = 1,
+                Title = "Approval task",
+                TaskType = WfTaskType.access.ToString(),
+                StateId = 3
+            };
+            reqTask.Approvals.Add(new WfApproval
+            {
+                InitialApproval = true,
+                Deadline = new DateTime(2026, 2, 3)
+            });
+            WfTicket ticket = new() { Id = 1, Tasks = [reqTask] };
+            WfHandler handler = CreateWorkflowHandler(WorkflowPhases.approval, WfTaskType.access.ToString(), ticket);
+            handler.InitDone = true;
+
+            IRenderedComponent<DisplayReqTaskTable> component = RenderDisplayReqTaskTable(context, handler, WorkflowPhases.approval, new WfStateDict());
+
+            Assert.That(component.Markup, Does.Not.Contain("approval_deadline"));
+        }
+
+        [Test]
         public async Task DisplayReqTaskTable_PlanningPhaseShowsStartContinueAndAssignActions()
         {
             await using BunitContext context = new();

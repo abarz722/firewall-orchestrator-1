@@ -246,6 +246,88 @@ internal class UiRequestTaskElementEditorTest
     }
 
     [Test]
+    public void GroupModify_UsesElementGroupNameWhenAdditionalInfoIsMissing()
+    {
+        WfReqTask reqTask = new()
+        {
+            Id = 42,
+            TaskType = WfTaskType.group_modify.ToString(),
+            Elements =
+            [
+                new WfReqElement
+                {
+                    Field = ElemFieldType.source.ToString(),
+                    GroupName = "existing-group",
+                    RequestAction = RequestAction.unchanged.ToString()
+                }
+            ]
+        };
+        RequestTaskElementEditor component = CreateComponent(reqTask, WfTaskType.group_modify);
+
+        component.InitializeElements();
+
+        Assert.That(component.CurrentGroupName, Is.EqualTo("existing-group"));
+    }
+
+    [Test]
+    public void GroupModify_InitializesServiceGroupModeFromPersistedServiceGroupId()
+    {
+        WfReqTask reqTask = new()
+        {
+            Id = 42,
+            TaskType = WfTaskType.group_modify.ToString(),
+            ServiceGroupId = 17,
+            Elements =
+            [
+                new WfReqElement
+                {
+                    Field = ElemFieldType.source.ToString(),
+                    GroupName = "service-group",
+                    RequestAction = RequestAction.unchanged.ToString()
+                }
+            ]
+        };
+        RequestTaskElementEditor component = CreateComponent(reqTask, WfTaskType.group_modify);
+
+        component.InitializeElements();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(GetMember<bool>(component, "grpTypeSvc"), Is.True);
+            Assert.That(GetMember<bool>(component, "IsServiceGroupEditorMode"), Is.True);
+        });
+    }
+
+    [Test]
+    public void GroupModify_RecognizesPersistedFlowServiceReferences()
+    {
+        WfReqTask reqTask = new()
+        {
+            Id = 42,
+            TaskType = WfTaskType.group_modify.ToString(),
+            Elements = [new WfReqElement { FlowServiceObjectId = 19 }]
+        };
+
+        Assert.That(InvokePrivateStatic<bool>("IsPersistedServiceGroup", reqTask), Is.True);
+    }
+
+    [Test]
+    public void GroupModify_UpdatesInitialModeWhenPersistedDataArrivesAfterFirstRender()
+    {
+        WfReqTask reqTask = new() { Id = 42, TaskType = WfTaskType.group_modify.ToString() };
+        RequestTaskElementEditor component = CreateComponent(reqTask, WfTaskType.group_modify);
+        component.InitializeElements();
+        SetMember(component, "initializedTaskId", reqTask.Id);
+        SetMember(component, "initializedTaskType", WfTaskType.group_modify);
+        SetMember(component, "initializedBundledDisplay", false);
+
+        reqTask.SetAddInfo(AdditionalInfoKeys.SvcGrpId, "17");
+        typeof(RequestTaskElementEditor).GetMethod("OnParametersSet", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(component, null);
+
+        Assert.That(GetMember<bool>(component, "grpTypeSvc"), Is.True);
+    }
+
+    [Test]
     public void GroupModify_InitializeElements_RestoresPersistedMemberDeletions()
     {
         WfReqTask reqTask = new() { Id = 42, TaskType = WfTaskType.group_modify.ToString() };
@@ -384,6 +466,8 @@ internal class UiRequestTaskElementEditorTest
         Assert.Multiple(() =>
         {
             Assert.That(component.CurrentGroupName, Is.EqualTo("network-group"));
+                Assert.That(reqTask.NetworkGroupId, Is.EqualTo(100));
+                Assert.That(reqTask.ServiceGroupId, Is.Null);
             Assert.That(GetMember<List<NwObjectElement>>(component, "actSources").Single().ElemId, Is.EqualTo(7));
             Assert.That(reqTask.Elements.Single(element => element.NetworkId == 11).Id, Is.EqualTo(7));
             Assert.That(reqTask.RemovedElements.Single().Id, Is.EqualTo(8));
@@ -416,6 +500,8 @@ internal class UiRequestTaskElementEditorTest
         Assert.Multiple(() =>
         {
             Assert.That(component.CurrentGroupName, Is.EqualTo("service-group"));
+                Assert.That(reqTask.ServiceGroupId, Is.EqualTo(100));
+                Assert.That(reqTask.NetworkGroupId, Is.Null);
             Assert.That(GetMember<List<NwServiceElement>>(component, "actServices").Single().ElemId, Is.EqualTo(7));
             Assert.That(reqTask.Elements.Single(element => element.ServiceId == 17).Id, Is.EqualTo(7));
             Assert.That(reqTask.RemovedElements.Single().Id, Is.EqualTo(8));
@@ -450,6 +536,8 @@ internal class UiRequestTaskElementEditorTest
         Assert.Multiple(() =>
         {
             Assert.That(reqTask.Elements, Has.Count.EqualTo(1));
+                Assert.That(reqTask.ServiceGroupId, Is.EqualTo(100));
+                Assert.That(reqTask.NetworkGroupId, Is.Null);
             Assert.That(reqTask.Elements, Has.All.Property(nameof(WfReqElement.Field)).EqualTo(ElemFieldType.service.ToString()));
             Assert.That(reqTask.RemovedElements.Select(element => element.Id), Is.EquivalentTo(new List<long> { 7L }));
             Assert.That(reqTask.Elements.Single().ServiceId, Is.EqualTo(17));
@@ -484,6 +572,8 @@ internal class UiRequestTaskElementEditorTest
         Assert.Multiple(() =>
         {
             Assert.That(reqTask.Elements, Has.Count.EqualTo(1));
+                Assert.That(reqTask.NetworkGroupId, Is.EqualTo(100));
+                Assert.That(reqTask.ServiceGroupId, Is.Null);
             Assert.That(reqTask.Elements, Has.All.Property(nameof(WfReqElement.Field)).EqualTo(ElemFieldType.source.ToString()));
             Assert.That(reqTask.RemovedElements.Select(element => element.Id), Is.EquivalentTo(new List<long> { 8L }));
             Assert.That(reqTask.Elements.Single().NetworkId, Is.EqualTo(11));
@@ -620,6 +710,7 @@ internal class UiRequestTaskElementEditorTest
         {
             Assert.That(InvokePrivate<string>(component, "DisplayObjectElement", new NwObjectElement { GroupName = "group", Name = "name" }), Is.EqualTo("name"));
             Assert.That(InvokePrivate<string>(component, "DisplayObjectElement", new NwObjectElement { Name = "name" }), Is.EqualTo("name"));
+            Assert.That(InvokePrivate<string>(component, "DisplayObjectElement", new NwObjectElement { NetworkId = 7, GroupName = "group", Name = "group" }), Is.EqualTo("7"));
             Assert.That(InvokePrivate<string>(component, "DisplayObjectElement", new NwObjectElement { IpString = "10.0.0.1", IpEndString = "10.0.0.2" }), Does.Contain("10.0.0.1").And.Contain("10.0.0.2"));
         });
     }
@@ -683,6 +774,8 @@ internal class UiRequestTaskElementEditorTest
                 new NwServiceElement { GroupName = "service-group", Name = "service" }), Is.EqualTo("service"));
             Assert.That(InvokePrivate<string>(component, "DisplayServiceElement",
                 new NwServiceElement { Name = "service", Port = 0, ProtoId = 6 }), Is.EqualTo("service"));
+            Assert.That(InvokePrivate<string>(component, "DisplayServiceElement",
+                new NwServiceElement { ServiceId = 8, GroupName = "service-group", Name = "service-group" }), Is.EqualTo("8"));
             Assert.That(InvokePrivate<string>(component, "DisplayServiceElement",
                 new NwServiceElement { Port = 443, ProtoId = 6 }), Is.EqualTo("443/TCP"));
         });

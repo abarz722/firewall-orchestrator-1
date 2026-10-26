@@ -34,6 +34,30 @@ namespace FWO.Test
         }
 
         [Test]
+        public void DisplayObjectAndServiceElements_UseFlowIdsAndValueFallbacks()
+        {
+            DisplayImplementationTask component = new();
+            SetMember(component, "userConfig", CreateUserConfig());
+
+            string objectGroupDisplay = (string)GetPrivateMethod(typeof(DisplayImplementationTask), "DisplayObjectElement")
+                .Invoke(component, [new NwObjectElement { FlowNetworkGroupId = 42 }])!;
+            string objectValueDisplay = (string)GetPrivateMethod(typeof(DisplayImplementationTask), "DisplayObjectElement")
+                .Invoke(component, [new NwObjectElement { GroupName = "network-group" }])!;
+            string serviceObjectDisplay = (string)GetPrivateMethod(typeof(DisplayImplementationTask), "DisplayServiceElement")
+                .Invoke(component, [new NwServiceElement { FlowServiceObjectId = 44 }])!;
+            string serviceValueDisplay = (string)GetPrivateMethod(typeof(DisplayImplementationTask), "DisplayServiceElement")
+                .Invoke(component, [new NwServiceElement { GroupName = "service-group" }])!;
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(objectGroupDisplay, Is.EqualTo("42"));
+                Assert.That(objectValueDisplay, Is.EqualTo("network-group"));
+                Assert.That(serviceObjectDisplay, Is.EqualTo("44"));
+                Assert.That(serviceValueDisplay, Is.EqualTo("service-group"));
+            });
+        }
+
+        [Test]
         public void DisplayDevice_ReturnsAllWhenRequestUsesAllDevices()
         {
             DisplayImplementationTask component = new();
@@ -645,6 +669,57 @@ namespace FWO.Test
                 Assert.That(component.Markup, Does.Contain("SG-ImplGroup"));
                 Assert.That(component.Markup, Does.Not.Contain("HiddenObjectName"));
                 Assert.That(component.Markup, Does.Not.Contain("HiddenServiceName"));
+            });
+        }
+
+        [Test]
+        public async Task DisplayImplementationTask_GroupModifyReadOnlyDisplaysRequestedChanges()
+        {
+            WfImplTask implTask = new()
+            {
+                Id = 22,
+                Title = "Modify groups",
+                TaskType = WfTaskType.group_modify.ToString(),
+                StateId = 1,
+                ImplElements =
+                [
+                new WfImplElement
+                {
+                    Id = 1,
+                    ImplTaskId = 22,
+                    Field = ElemFieldType.source.ToString(),
+                    NetworkId = 42,
+                    GroupName = "AR-RequestedGroup",
+                    Name = "HiddenRequestedObjectName"
+                },
+                new WfImplElement
+                {
+                    Id = 2,
+                    ImplTaskId = 22,
+                    Field = ElemFieldType.service.ToString(),
+                    ServiceId = 44,
+                    GroupName = "SG-RequestedGroup",
+                    Name = "HiddenRequestedServiceName"
+                }
+                ]
+            };
+            WfHandler handler = new()
+            {
+                DisplayImplTaskMode = true,
+                EditImplTaskMode = false,
+                ActImplTask = implTask,
+                ActReqTask = new WfReqTask(),
+                Devices = []
+            };
+            WfStateDict states = new() { Name = { [1] = "Open" } };
+
+            await using BunitContext context = new();
+            IRenderedComponent<DisplayImplementationTask> component = RenderDisplayImplementationTask(context, handler, states, Roles.Implementer);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(component.Markup, Does.Contain("AR-RequestedGroup"));
+                Assert.That(component.Markup, Does.Contain("SG-RequestedGroup"));
             });
         }
 

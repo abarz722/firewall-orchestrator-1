@@ -29,7 +29,12 @@ namespace FWO.Middleware.Server.Controllers
         private readonly List<Ldap> ldaps;
         private readonly JwtWriter jwtWriter;
         private readonly TokenLifetimeProvider tokenLifetimeProvider;
-        private static readonly KeyedAsyncLock<long> TicketActionLocks = new();
+        // A ticket promotion can fan out into one action request per request task. Do not cap
+        // callers for one ticket: the ticket itself determines the fan-out size. Keep the global
+        // key cap and the per-owner distinct-ticket cap as flood protection.
+        private static readonly KeyedAsyncLock<long> TicketActionLocks = new(
+            maxCallersPerKey: int.MaxValue,
+            maxCallersPerOwnerAndKey: int.MaxValue);
         private static readonly WorkflowEmailBundleStore EmailBundleStore = new();
         private static readonly List<string> kNoGroups = [];
         private const string kStateChangeRefusalTitleKey = "actions";

@@ -108,7 +108,7 @@
                         @(context.CurrentHandler?.Name)
                     </Template>
                 </Column>
-                @if(Phase == WorkflowPhases.approval)
+                @if(Phase == WorkflowPhases.approval && TicketFieldVisibility.ShowDeadline)
                 {
                     <Column TableItem="WfReqTask" Title="@(userConfig.GetText("approval_deadline"))" Field="@(x => x.Id)" Sortable="true" Filterable="true" >
                         <Template>
@@ -170,6 +170,7 @@
     public Func<WfImplTask, Task> StartImplPhase { get; set; } = DefaultInit.DoNothing;
 
     static List<string> validRoles = new (){Roles.Planner};
+    private TicketFieldVisibilityConfig TicketFieldVisibility => TicketFieldVisibilityConfig.Parse(userConfig.ReqTicketFieldVisibility);
 
 
     private async Task Reset()

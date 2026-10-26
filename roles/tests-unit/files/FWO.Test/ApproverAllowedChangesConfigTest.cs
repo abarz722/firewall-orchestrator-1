@@ -34,6 +34,21 @@ namespace FWO.Test
         }
 
         [Test]
+        public void Catalog_OffersGroupModifyTaskFields()
+        {
+            List<string> groupModifyFields = ApproverAllowedChangesCatalog.TaskTypeFields[WfTaskType.group_modify]
+                .ConvertAll(field => field.Key);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(groupModifyFields, Does.Contain(WorkflowEditableFieldKeys.Title));
+                Assert.That(groupModifyFields, Does.Contain(WorkflowEditableFieldKeys.Management));
+                Assert.That(groupModifyFields, Does.Contain(WorkflowEditableFieldKeys.Reason));
+                Assert.That(groupModifyFields, Does.Not.Contain(WorkflowEditableFieldKeys.Name));
+            });
+        }
+
+        [Test]
         public void Parse_ReturnsDefaults_WhenConfigIsEmpty()
         {
             ApproverAllowedChangesConfig config = ApproverAllowedChangesConfig.Parse("");
