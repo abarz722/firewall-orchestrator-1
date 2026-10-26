@@ -35595,6 +35595,7 @@
                     "columns": [
                       "active",
                       "phase_visibility_mode",
+                      "promotion_mode",
                       "name",
                       "phase",
                       "id",
@@ -35612,6 +35613,7 @@
                     "columns": [
                       "active",
                       "phase_visibility_mode",
+                      "promotion_mode",
                       "name",
                       "phase",
                       "id",
@@ -35629,6 +35631,7 @@
                     "columns": [
                       "active",
                       "phase_visibility_mode",
+                      "promotion_mode",
                       "name",
                       "phase",
                       "id",
@@ -35646,6 +35649,7 @@
                     "columns": [
                       "active",
                       "phase_visibility_mode",
+                      "promotion_mode",
                       "name",
                       "phase",
                       "id",
@@ -35663,6 +35667,7 @@
                     "columns": [
                       "active",
                       "phase_visibility_mode",
+                      "promotion_mode",
                       "name",
                       "phase",
                       "id",
@@ -35680,6 +35685,7 @@
                     "columns": [
                       "active",
                       "phase_visibility_mode",
+                      "promotion_mode",
                       "name",
                       "phase",
                       "id",
@@ -35697,6 +35703,7 @@
                     "columns": [
                       "active",
                       "phase_visibility_mode",
+                      "promotion_mode",
                       "name",
                       "phase",
                       "id",
@@ -35714,6 +35721,7 @@
                     "columns": [
                       "active",
                       "phase_visibility_mode",
+                      "promotion_mode",
                       "name",
                       "phase",
                       "id",

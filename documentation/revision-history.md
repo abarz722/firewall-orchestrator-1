@@ -1,5 +1,8 @@
 # Firewall Orchestrator Revision History
 
+## 9.8.4 - 26.10.2026
+- workflow state matrix: configure whether phases after request are promoted from the ticket, from individual tasks, or both; the request phase remains ticket-driven
+
 ## 9.8.3 - 26.10.2026
 - request workflow: the device specific settings autoPlanImplementation and autoPlanImplementationForRules (renamed from planImplementation and planImplementationOverrideForRules) decide which implementation tasks are created automatically, independently of the planning phase
   - rule tasks (access, rule_modify, rule_delete) need both settings, all other task types autoPlanImplementation; the default of autoPlanImplementationForRules is false

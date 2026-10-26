@@ -179,9 +179,13 @@ namespace FWO.Services.Workflow
         {
             try
             {
-                List<WfReqTask> requestTasks = GetBundledRequestTasks(ActReqTask, ActReqTask.StateId);
+                List<WfReqTask> requestTasks = GetBundledRequestTasks(ActReqTask);
                 foreach (WfReqTask requestTask in requestTasks)
                 {
+                    if (requestTask.Id != ActReqTask.Id && requestTask.StateId >= reqTask.StateId)
+                    {
+                        continue;
+                    }
                     // ActReqTask is a working copy; use it for the selected task and the
                     // ticket instance for its bundled siblings so every task is persisted
                     // and its request-task actions are executed independently.
@@ -226,6 +230,30 @@ namespace FWO.Services.Workflow
             if (Phase == WorkflowPhases.planning)
             {
                 await UpgradeImplTaskStatesToReqTask(reqTask);
+            }
+        }
+
+        /// <summary>
+        /// Keeps a bundled request-task group together when an automatic task action promotes one
+        /// request task. Tasks that already reached a later state are deliberately left untouched.
+        /// </summary>
+        private async Task PromoteLaggingBundledRequestTasks(int targetStateId, UiUser? currentHandler)
+        {
+            foreach (WfReqTask bundledTask in GetBundledRequestTasks(ActReqTask)
+                .Where(task => task.Id != ActReqTask.Id && task.StateId < targetStateId))
+            {
+                bundledTask.StateId = targetStateId;
+                bundledTask.CurrentHandler = currentHandler;
+                if (dbAcc != null)
+                {
+                    StateMatrix bundledTaskMatrix = stateMatrixDict.Matrices[bundledTask.TaskType];
+                    AuditUnexpectedStateTransition(bundledTask, WfObjectScopes.RequestTask, bundledTaskMatrix);
+                    await dbAcc.UpdateReqTaskStateInDb(bundledTask);
+                }
+                SyncActTicketFromReqTask(bundledTask);
+
+                StateMatrix reqTaskMatrix = stateMatrixDict.Matrices[bundledTask.TaskType];
+                await UpdateReqTaskAndApprovalStatesFromTicket(bundledTask, reqTaskMatrix, targetStateId);
             }
         }
 
@@ -296,6 +324,7 @@ namespace FWO.Services.Workflow
                         // approval outcome before deriving the parent ticket.
                         StateMatrix reqTaskMatrix = stateMatrixDict.Matrices[ActReqTask.TaskType];
                         await UpdateReqTaskAndApprovalStatesFromTicket(ActReqTask, reqTaskMatrix, ActReqTask.StateId);
+                        await PromoteLaggingBundledRequestTasks(ActReqTask.StateId, statefulObject.CurrentHandler);
                         await UpdateActTicketStateFromReqTasks();
                         break;
                     case WfObjectScopes.ImplementationTask:
@@ -749,13 +778,12 @@ namespace FWO.Services.Workflow
         private async Task UpdateReqTaskStatesFromActImplTask(bool triggerActions = true,
             NotificationPlaceholderData? placeholderData = null)
         {
-            int selectedRequestTaskState = ActReqTask.StateId;
             SyncReqTaskStopTime(ActReqTask);
             WfTicket? storedTicket = dbAcc != null ? await dbAcc.LoadPreviousTicket(ActReqTask.TicketId) : null;
             await UpdateReqTaskStateFromImplTasks(ActReqTask, triggerActions, storedTicket, placeholderData);
 
-            List<WfReqTask> bundledTasks = [.. GetBundledRequestTasks(ActReqTask, selectedRequestTaskState)
-                .Where(task => task.Id != ActReqTask.Id)];
+            List<WfReqTask> bundledTasks = [.. GetBundledRequestTasks(ActReqTask)
+                .Where(task => task.Id != ActReqTask.Id && task.StateId < ActReqTask.StateId)];
             foreach (WfReqTask bundledTask in bundledTasks)
             {
                 bundledTask.StateId = ActReqTask.StateId;

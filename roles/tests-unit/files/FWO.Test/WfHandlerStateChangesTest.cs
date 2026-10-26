@@ -333,6 +333,40 @@ namespace FWO.Test
         }
 
         [Test]
+        public async Task PromoteReqTask_PromotesBundledTaskInLowerStateRow()
+        {
+            WfReqTask selectedTask = new()
+            {
+                Id = 7,
+                TicketId = 10,
+                StateId = 0,
+                TaskType = WfTaskType.access.ToString()
+            };
+            selectedTask.SetAddInfo(AdditionalInfoKeys.FlowBundleId, "bundle-7-8");
+            WfReqTask laggingTask = new()
+            {
+                Id = 8,
+                TicketId = 10,
+                StateId = 1,
+                TaskType = WfTaskType.access.ToString()
+            };
+            laggingTask.SetAddInfo(AdditionalInfoKeys.FlowBundleId, "bundle-7-8");
+            WfHandler handler = new()
+            {
+                ActReqTask = selectedTask,
+                ActTicket = new WfTicket { Id = 10, Tasks = [selectedTask, laggingTask] },
+                MasterStateMatrix = new StateMatrix { MinTicketCompleted = 99, LowestEndState = 10 },
+                ActStateMatrix = new StateMatrix { LowestStartedState = 2, LowestEndState = 10 }
+            };
+            handler.userConfig.ReqConsiderBundling = true;
+            SetMatrix(handler, WfTaskType.access.ToString(), handler.ActStateMatrix);
+
+            await handler.PromoteReqTask(new WfStatefulObject { StateId = 2 });
+
+            Assert.That(handler.ActTicket.Tasks.Select(task => task.StateId), Is.EqualTo(kPromotedTaskStates));
+        }
+
+        [Test]
         public async Task PromoteReqTask_WithStartedHandlerDisabled_DoesNotSetStartOrHandler()
         {
             WfHandler handler = new();
@@ -428,7 +462,7 @@ namespace FWO.Test
         }
 
         [Test]
-        public async Task PromoteImplTask_DoesNotUpdateBundledTaskInDifferentStateRow()
+        public async Task PromoteImplTask_UpdatesLaggingBundledTaskInDifferentStateRow()
         {
             WfHandler handler = CreateImplementationHandler(considerBundling: true);
             WfImplTask implTask = new() { Id = 3, ReqTaskId = 7, StateId = 2 };
@@ -446,8 +480,8 @@ namespace FWO.Test
             Assert.Multiple(() =>
             {
                 Assert.That(selectedReqTask.StateId, Is.EqualTo(5));
-                Assert.That(differentStateReqTask.StateId, Is.EqualTo(3));
-                Assert.That(differentStateReqTask.Stop, Is.Null);
+                Assert.That(differentStateReqTask.StateId, Is.EqualTo(5));
+                Assert.That(differentStateReqTask.Stop, Is.EqualTo(selectedReqTask.Stop));
             });
         }
 
@@ -615,6 +649,80 @@ namespace FWO.Test
             Assert.That(handler.ActReqTask.CurrentHandler?.DbId, Is.EqualTo(99));
             Assert.That(handler.ActTicket.Tasks[0].StateId, Is.EqualTo(3));
             Assert.That(handler.ActTicket.StateId, Is.EqualTo(3));
+        }
+
+        [Test]
+        public async Task AutoPromote_RequestTaskScope_PromotesAllLaggingBundledTasks()
+        {
+            StateMatrix matrix = new()
+            {
+                LowestInputState = 0,
+                LowestStartedState = 2,
+                LowestEndState = 5
+            };
+            WfReqTask firstTask = new()
+            {
+                Id = 7,
+                TicketId = 1,
+                TaskType = WfTaskType.access.ToString(),
+                StateId = 0
+            };
+            WfReqTask secondTask = new()
+            {
+                Id = 8,
+                TicketId = 1,
+                TaskType = WfTaskType.access.ToString(),
+                StateId = 0
+            };
+            firstTask.SetAddInfo(AdditionalInfoKeys.FlowBundleId, "bundle-7-8");
+            secondTask.SetAddInfo(AdditionalInfoKeys.FlowBundleId, "bundle-7-8");
+            WfTicket ticket = new() { Id = 1, Tasks = [firstTask, secondTask] };
+            WfHandler handler = new()
+            {
+                ActTicket = ticket,
+                userConfig = new SimulatedUserConfig { ReqConsiderBundling = true },
+                MasterStateMatrix = matrix
+            };
+            handler.TicketList.Add(ticket);
+            SetMatrix(handler, WfTaskType.access.ToString(), matrix);
+
+            await handler.AutoPromote(firstTask, WfObjectScopes.RequestTask, 2);
+
+            Assert.That(ticket.Tasks.Select(task => task.StateId), Is.EqualTo(kPromotedTaskStates));
+        }
+
+        [TestCase(PromotionMode.Ticket, true, false)]
+        [TestCase(PromotionMode.Task, false, true)]
+        [TestCase(PromotionMode.Both, true, true)]
+        public void PromotionMode_ControlsAvailablePromotionScopes(PromotionMode mode, bool ticketVisible, bool taskVisible)
+        {
+            WfHandler handler = new()
+            {
+                Phase = WorkflowPhases.planning,
+                MasterStateMatrix = new StateMatrix { PromotionMode = mode }
+            };
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(handler.CanPromoteTicketInCurrentPhase(), Is.EqualTo(ticketVisible));
+                Assert.That(handler.CanPromoteTaskInCurrentPhase(), Is.EqualTo(taskVisible));
+            });
+        }
+
+        [Test]
+        public void RequestPhase_AlwaysUsesTicketPromotion()
+        {
+            WfHandler handler = new()
+            {
+                Phase = WorkflowPhases.request,
+                MasterStateMatrix = new StateMatrix { PromotionMode = PromotionMode.Task }
+            };
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(handler.CanPromoteTicketInCurrentPhase(), Is.True);
+                Assert.That(handler.CanPromoteTaskInCurrentPhase(), Is.False);
+            });
         }
 
         [Test]

@@ -145,7 +145,7 @@
                             @(DisplayService.DisplayButton(userConfig, "approvals", Icons.Approval))</button>
                     }
                     <ConfiguredTaskActions WfHandler="WfHandler" OfferedActions="offeredActions"
-                        AllowStateChangingActions="@(!WfHandler.ReadOnlyMode && (WfHandler.EditReqTaskMode || WfHandler.PlanReqTaskMode || WfHandler.ApproveReqTaskMode))"
+                        AllowStateChangingActions="@(!WfHandler.ReadOnlyMode && WfHandler.CanPromoteTaskInCurrentPhase() && (WfHandler.EditReqTaskMode || WfHandler.PlanReqTaskMode || WfHandler.ApproveReqTaskMode))"
                         Target="WfHandler.ActReqTask"
                         Scope="WfObjectScopes.RequestTask" Owner="@(metadataEditor?.CurrentOwner ?? actOwner)"
                         TicketId="WfHandler.ActReqTask.TicketId" AfterAction="AfterConfiguredAction"
@@ -172,7 +172,7 @@
                             </NotAuthorized>
                         </ExecutionModeAuthorizeView>
                     }
-                    else if (WfHandler.PlanReqTaskMode)
+                    else if (WfHandler.PlanReqTaskMode && WfHandler.CanPromoteTaskInCurrentPhase())
                     {
                         <ExecutionModeAuthorizeView Roles="@($"{Roles.Admin}, {Roles.Planner}")">
                             <Authorized>

@@ -240,6 +240,9 @@ For a feature-centric, thematically grouped view see
 
 ## 9.8.x
 
+### 9.8.4 — 26.10.2026
+- Workflow state matrices can configure whether phases after request are promoted from the ticket, from individual tasks, or both. The request phase remains ticket-driven.
+
 ### 9.8.3 — 26.10.2026
 - Implementation tasks are created by the state action "Create implementation tasks"; the device specific settings "Auto plan implementation" and "Auto plan implementation for rules" decide per gateway and management which tasks it creates. Workflow Customizing offers the device input in the request and the path analysis algorithms "For each device" and "First device (if available)".
 

@@ -56,7 +56,7 @@
                                             }
                                         }
                                     }
-                                    else if (Phase > WorkflowPhases.request)
+                                    else if (Phase > WorkflowPhases.request && WfHandler.CanPromoteTaskInCurrentPhase())
                                     {
                                         @if (context.StateId < taskStateMatrix.LowestStartedState)
                                         {

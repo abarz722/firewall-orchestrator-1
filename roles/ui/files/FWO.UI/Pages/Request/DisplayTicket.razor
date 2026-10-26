@@ -428,6 +428,10 @@
 
     private bool CheckPromoteTicket()
     {
+        if (!WfHandler.CanPromoteTicketInCurrentPhase())
+        {
+            return false;
+        }
         if (WfHandler.ActTicket.StateId < WfHandler.MasterStateMatrix.LowestStartedState || WfHandler.ActTicket.StateId >= WfHandler.MasterStateMatrix.LowestEndState)
         {
             return false;
