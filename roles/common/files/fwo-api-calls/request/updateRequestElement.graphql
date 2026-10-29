@@ -2,6 +2,7 @@ mutation updateRequestElement(
   $id: bigint!
   $requestAction: action_enum
   $taskId: bigint!
+  $timeObjectTaskId: bigint
   $ip: cidr
   $ipEnd: cidr
   $port: Int
@@ -30,6 +31,7 @@ mutation updateRequestElement(
     _set: {
       request_action: $requestAction
       task_id: $taskId
+      time_object_task_id: $timeObjectTaskId
       ip: $ip
       ip_end: $ipEnd
       port: $port

@@ -240,6 +240,9 @@ For a feature-centric, thematically grouped view see
 
 ## 9.8.x
 
+### 9.8.5 - 29.10.2026
+- Access-task time objects reference their ticket-local object-create task, keeping name and validity changes consistent.
+
 ### 9.8.4 — 26.10.2026
 - Workflow state matrices can configure whether phases after request are promoted from the ticket, from individual tasks, or both. The request phase remains ticket-driven.
 

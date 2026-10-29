@@ -1,5 +1,8 @@
 # Firewall Orchestrator Revision History
 
+## 9.8.5 - 29.10.2026
+- request workflow: access-task time objects reference their ticket-local object-create task, so updates to the defining task remain consistent
+
 ## 9.8.4 - 26.10.2026
 - workflow state matrix: configure whether phases after request are promoted from the ticket, from individual tasks, or both; the request phase remains ticket-driven
 

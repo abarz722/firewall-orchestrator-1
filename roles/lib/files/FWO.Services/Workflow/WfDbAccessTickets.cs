@@ -53,7 +53,9 @@ namespace FWO.Services.Workflow
                 {
                     return await SavedWithoutInitialActions(ticket, newTicketId, null);
                 }
+                WfTicket sourceTicket = ticket;
                 ticket = savedTicket;
+                await LinkTicketTimeObjectTasks(sourceTicket, ticket);
                 await LogCreatedRequestTasks(ticket);
                 ticket.MarkCreatedStateChanged(newStateId);
             }
@@ -88,6 +90,59 @@ namespace FWO.Services.Workflow
             }
 
             return new WfTicketCreationResult(ticket, false);
+        }
+
+        private async Task LinkTicketTimeObjectTasks(WfTicket sourceTicket, WfTicket ticket)
+        {
+            HashSet<long> linkedAccessTaskIds = [];
+            foreach (WfReqTask sourceAccessTask in sourceTicket.Tasks.Where(task => task.TaskType == WfTaskType.access.ToString()))
+            {
+                WfReqElement? sourceTimeElement = TimeObjectElementHelper.Find(sourceAccessTask.Elements);
+                if (sourceTimeElement?.TimeObjectEntityId is not < 0)
+                {
+                    continue;
+                }
+
+                WfReqTask? sourceObjectTask = sourceTicket.Tasks.FirstOrDefault(task =>
+                    task.TaskType == WfTaskType.object_create.ToString()
+                    && TimeObjectElementHelper.Find(task.Elements)?.TimeObjectEntityId == sourceTimeElement.TimeObjectEntityId);
+                if (sourceObjectTask == null)
+                {
+                    continue;
+                }
+
+                WfReqTask? accessTask = ticket.Tasks.FirstOrDefault(task => task.TaskNumber == sourceAccessTask.TaskNumber);
+                WfReqTask? objectTask = ticket.Tasks.FirstOrDefault(task => task.TaskNumber == sourceObjectTask.TaskNumber);
+                WfReqElement? timeElement = TimeObjectElementHelper.Find(accessTask?.Elements ?? []);
+                if (timeElement == null || accessTask == null || timeElement.FlowTimeObjectId.HasValue || timeElement.TimeObjId.HasValue ||
+                    timeElement.TimeObjectTaskId.HasValue || objectTask?.Id is not > 0)
+                {
+                    continue;
+                }
+
+                TimeObjectElementHelper.SetTicketTaskReference(timeElement, objectTask.Id);
+                await UpdateReqElementsInDb(accessTask);
+                linkedAccessTaskIds.Add(accessTask.Id);
+            }
+
+            foreach (WfReqTask accessTask in ticket.Tasks.Where(task =>
+                task.TaskType == WfTaskType.access.ToString() && !linkedAccessTaskIds.Contains(task.Id)))
+            {
+                WfReqElement? timeElement = TimeObjectElementHelper.Find(accessTask.Elements);
+                if (timeElement == null || timeElement.FlowTimeObjectId.HasValue || timeElement.TimeObjId.HasValue ||
+                    timeElement.TimeObjectTaskId.HasValue)
+                {
+                    continue;
+                }
+
+                WfReqTask? objectTask = TimeObjectReferenceResolver.FindParallelTimeTask(
+                    ticket.Tasks, accessTask, null, null);
+                if (objectTask?.Id > 0)
+                {
+                    TimeObjectElementHelper.SetTicketTaskReference(timeElement, objectTask.Id);
+                    await UpdateReqElementsInDb(accessTask);
+                }
+            }
         }
 
         /// <summary>

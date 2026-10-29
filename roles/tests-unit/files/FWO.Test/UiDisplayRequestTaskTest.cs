@@ -1392,6 +1392,12 @@ namespace FWO.Test
             };
             DisplayRequestTask component = new();
             SetMember(component, nameof(DisplayRequestTask.WfHandler), handler);
+            handler.ActReqTask.Elements.Add(new WfReqElement
+            {
+                Field = ElemFieldType.time.ToString(),
+                FlowTimeObjectId = 1,
+                Name = "Flow time"
+            });
             SetMember(component, "userConfig", new RequestWorkflowUserConfig());
             SetRequestTaskElementMember(component, "actSources", new List<NwObjectElement> { new("10.0.0.1", 1) });
             SetRequestTaskElementMember(component, "actDestinations", new List<NwObjectElement> { new("10.0.1.1", 1) });
@@ -1423,6 +1429,12 @@ namespace FWO.Test
                 {
                     PhaseActive = { [WorkflowPhases.planning] = true }
                 }
+            });
+            GetMember<WfHandler>(component, nameof(DisplayRequestTask.WfHandler)).ActReqTask.Elements.Add(new WfReqElement
+            {
+                Field = ElemFieldType.time.ToString(),
+                FlowTimeObjectId = 1,
+                Name = "Flow time"
             });
             SetMember(component, "userConfig", new RequestWorkflowUserConfig());
             SetRequestTaskElementMember(component, "actSources", new List<NwObjectElement> { new("10.0.0.1", 1) });
@@ -1456,6 +1468,12 @@ namespace FWO.Test
                 {
                     PhaseActive = { [WorkflowPhases.planning] = true }
                 }
+            });
+            GetMember<WfHandler>(component, nameof(DisplayRequestTask.WfHandler)).ActReqTask.Elements.Add(new WfReqElement
+            {
+                Field = ElemFieldType.time.ToString(),
+                FlowTimeObjectId = 1,
+                Name = "Flow time"
             });
             SetMember(component, "userConfig", new RequestWorkflowUserConfig());
             SetRequestTaskElementMember(component, "actSources", new List<NwObjectElement> { new("10.0.0.1", 1) });

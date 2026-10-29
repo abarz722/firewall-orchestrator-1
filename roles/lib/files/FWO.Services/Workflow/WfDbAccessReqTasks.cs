@@ -237,6 +237,7 @@ namespace FWO.Services.Workflow
                 {
                     if (element.Id == 0)
                     {
+                        element.TaskId = reqtask.Id;
                         element.Id = await AddReqElementToDb(element);
                     }
                     else
@@ -325,6 +326,7 @@ namespace FWO.Services.Workflow
             var variables = BuildElementBaseVariables(element, element.Cidr, element.CidrEnd);
             variables["requestAction"] = element.RequestAction;
             variables["taskId"] = element.TaskId;
+            variables["timeObjectTaskId"] = element.TimeObjectTaskId;
             variables["deviceId"] = element.DeviceId;
             variables["flowNwObjId"] = element.FlowNetworkObjectId;
             variables["flowNwGrpId"] = element.FlowNetworkGroupId;

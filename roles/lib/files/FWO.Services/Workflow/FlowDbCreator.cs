@@ -4,7 +4,6 @@ using FWO.Data;
 using FWO.Data.Flow;
 using FWO.Data.Workflow;
 using FWO.Logging;
-using System.Globalization;
 
 namespace FWO.Services.Workflow
 {
@@ -59,7 +58,35 @@ namespace FWO.Services.Workflow
 
         private static List<FlowCreationPayload> BuildTicketFlowPayloads(WfTicket ticket, FwoOwner? owner, long? ticketId, string timeObjectPrecision)
         {
-            return [.. ticket.Tasks.Where(IsFlowRelevantTask).Select(task => BuildRequestTaskFlowPayload(task, owner, ticketId ?? ticket.Id, timeObjectPrecision))];
+            List<FlowCreationPayload> payloads = [];
+            foreach (WfReqTask task in ticket.Tasks.Where(IsFlowRelevantTask))
+            {
+                SynchronizeReferencedTimeObject(task, ticket.Tasks);
+                payloads.Add(BuildRequestTaskFlowPayload(task, owner, ticketId ?? ticket.Id, timeObjectPrecision));
+            }
+            return payloads;
+        }
+
+        private static void SynchronizeReferencedTimeObject(WfReqTask task, IEnumerable<WfReqTask> ticketTasks)
+        {
+            WfReqElement? accessTimeElement = TimeObjectElementHelper.Find(task.Elements);
+            if (accessTimeElement?.TimeObjectTaskId is not > 0)
+            {
+                return;
+            }
+
+            WfReqElement? definingTimeElement = TimeObjectReferenceResolver.FindParallelTimeElement(
+                ticketTasks, task, null, null);
+            if (definingTimeElement == null)
+            {
+                return;
+            }
+
+            task.TargetBeginDate = definingTimeElement.StartTime;
+            task.TargetEndDate = definingTimeElement.EndTime;
+            accessTimeElement.Name = definingTimeElement.Name;
+            accessTimeElement.StartTime = definingTimeElement.StartTime;
+            accessTimeElement.EndTime = definingTimeElement.EndTime;
         }
 
         private static FlowCreationPayload BuildRequestTaskFlowPayload(WfReqTask task, FwoOwner? owner, long? ticketId, string timeObjectPrecision)
@@ -78,13 +105,21 @@ namespace FWO.Services.Workflow
                 GroupName = task.GetAddInfoValue(AdditionalInfoKeys.GrpName),
                 TimeStart = timeStart,
                 TimeEnd = timeEnd,
-                TimeName = BuildTimeObjectName(timeStart, timeEnd, timeObjectPrecision),
+                TimeName = GetTimeObjectName(task, timeStart, timeEnd, timeObjectPrecision),
                 Sources = BuildFlowObjects(task.Elements, ElemFieldType.source),
                 Destinations = BuildFlowObjects(task.Elements, ElemFieldType.destination),
                 Services = BuildFlowServices(task.Elements),
                 TimeObjects = BuildFlowTimeObjects(task.Elements),
                 OriginRequestTaskIds = task.Id > 0 ? [task.Id] : []
             };
+        }
+
+        private static string GetTimeObjectName(WfReqTask task, DateTime? timeStart, DateTime? timeEnd, string timeObjectPrecision)
+        {
+            string configuredName = TimeObjectElementHelper.Find(task.Elements)?.Name ?? "";
+            return !string.IsNullOrWhiteSpace(configuredName)
+                ? configuredName
+                : TimeObjectNamingHelper.BuildDateBasedName(timeStart, timeEnd, timeObjectPrecision);
         }
 
         private static List<FlowObjectSnapshot> BuildFlowObjects(IEnumerable<WfReqElement> elements, ElemFieldType field)
@@ -729,34 +764,6 @@ namespace FWO.Services.Workflow
         /// name shows requesters the period they asked for, so with a time zone offset it can name a different
         /// day than the stored timestamps. Consumers that need the exact period have to use the timestamps.
         /// </summary>
-        private static string BuildTimeObjectName(DateTime? timeStart, DateTime? timeEnd, string timeObjectPrecision)
-        {
-            if (timeStart.HasValue && timeEnd.HasValue)
-            {
-                return $"{FormatTimeObjectDate(timeStart.Value, timeObjectPrecision)} - {FormatTimeObjectDate(timeEnd.Value, timeObjectPrecision)}";
-            }
-            if (timeStart.HasValue)
-            {
-                return $">= {FormatTimeObjectDate(timeStart.Value, timeObjectPrecision)}";
-            }
-            if (timeEnd.HasValue)
-            {
-                return $"<= {FormatTimeObjectDate(timeEnd.Value, timeObjectPrecision)}";
-            }
-            return "";
-        }
-
-        private static string FormatTimeObjectDate(DateTime date, string timeObjectPrecision)
-        {
-            return timeObjectPrecision switch
-            {
-                FlowIntegrationTimePrecisionOptions.Date => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                FlowIntegrationTimePrecisionOptions.Hours => date.ToString("yyyy-MM-dd HH 'h'", CultureInfo.InvariantCulture),
-                FlowIntegrationTimePrecisionOptions.Minutes => date.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture),
-                _ => date.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)
-            };
-        }
-
         private static DateTime? NormalizeTimeObjectDate(DateTime? date, string timeObjectPrecision)
         {
             if (!date.HasValue)

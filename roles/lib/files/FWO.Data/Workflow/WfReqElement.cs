@@ -19,6 +19,13 @@ namespace FWO.Data.Workflow
         [JsonProperty("device_id"), JsonPropertyName("device_id")]
         public int? DeviceId { get; set; }
 
+        /// <summary>
+        /// Temporary correlation to the negative API entity id of a ticket-local time object.
+        /// It is used while creating a ticket and is never persisted as a database column.
+        /// </summary>
+        [Newtonsoft.Json.JsonIgnore, System.Text.Json.Serialization.JsonIgnore]
+        public long? TimeObjectEntityId { get; set; }
+
         public Cidr? Cidr { get; set; } = new();
         public Cidr? CidrEnd { get; set; } = new();
 
@@ -32,6 +39,7 @@ namespace FWO.Data.Workflow
             TaskId = element.TaskId;
             RequestAction = element.RequestAction;
             DeviceId = element.DeviceId;
+            TimeObjectEntityId = element.TimeObjectEntityId;
             Cidr = element.Cidr;
             CidrEnd = element.CidrEnd;
         }

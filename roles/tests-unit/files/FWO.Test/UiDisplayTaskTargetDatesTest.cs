@@ -66,7 +66,6 @@ namespace FWO.Test
             context.Services.AddSingleton<UserConfig>(new UiRequestWorkflowTest.RequestWorkflowUserConfig());
 
             IRenderedComponent<DisplayTaskTargetDates> component = context.Render<DisplayTaskTargetDates>(parameters => parameters
-                .Add(p => p.HideFlowTimeObjectSelection, true)
                 .Add(p => p.ShowTargetBeginDate, false)
                 .Add(p => p.ShowTargetEndDate, false));
 
@@ -85,7 +84,6 @@ namespace FWO.Test
             context.Services.AddSingleton<UserConfig>(new UiRequestWorkflowTest.RequestWorkflowUserConfig());
 
             IRenderedComponent<DisplayTaskTargetDates> component = context.Render<DisplayTaskTargetDates>(parameters => parameters
-                .Add(p => p.HideFlowTimeObjectSelection, true)
                 .Add(p => p.ShowTargetBeginDate, false)
                 .Add(p => p.ShowTargetEndDate, true));
 
@@ -314,7 +312,7 @@ namespace FWO.Test
         }
 
         [Test]
-        public async Task DisplayTaskTargetDates_FlowTimeObjectDropdownDisplaysNameWithoutRange()
+        public async Task TimeObjectSelector_FlowTimeObjectDropdownDisplaysNameWithoutRange()
         {
             await using BunitContext context = new();
             UiRequestWorkflowTest.RequestWorkflowApiConn apiConn = new()
@@ -345,9 +343,7 @@ namespace FWO.Test
             });
             context.Services.AddSingleton<DomEventService>();
 
-            IRenderedComponent<DisplayTaskTargetDates> component = context.Render<DisplayTaskTargetDates>(parameters => parameters
-                .Add(p => p.CanEditTargetBeginDate, true)
-                .Add(p => p.CanEditTargetEndDate, true));
+            IRenderedComponent<TimeObjectSelector> component = context.Render<TimeObjectSelector>();
 
             IRenderedComponent<Dropdown<FlowTimeObject>> dropdown = component.FindComponent<Dropdown<FlowTimeObject>>();
             string displayText = dropdown.Instance.ElementToString(apiConn.FlowTimeObjects.Single());
@@ -363,7 +359,81 @@ namespace FWO.Test
         }
 
         [Test]
-        public async Task DisplayTaskTargetDates_SelectFlowTimeObjectUpdatesBothDates()
+        public async Task TimeObjectSelector_TicketTimeObjectsAreAvailableWithoutFlowDb()
+        {
+            FlowTimeObject ticketTimeObject = new()
+            {
+                Id = -17,
+                Name = "Ticket maintenance",
+                StartTime = new DateTime(2026, 8, 1, 8, 0, 0),
+                EndTime = new DateTime(2026, 8, 1, 17, 0, 0)
+            };
+
+            await using BunitContext context = new();
+            context.Services.AddSingleton<ApiConnection>(new UiRequestWorkflowTest.RequestWorkflowApiConn());
+            context.Services.AddSingleton<UserConfig>(new UiRequestWorkflowTest.RequestWorkflowUserConfig
+            {
+                ReqUseFlowDb = false
+            });
+            context.Services.AddSingleton<DomEventService>();
+
+            IRenderedComponent<TimeObjectSelector> component = context.Render<TimeObjectSelector>(parameters => parameters
+                .Add(p => p.TicketTimeObjects, new List<FlowTimeObject> { ticketTimeObject }));
+
+            IRenderedComponent<Dropdown<FlowTimeObject>> dropdown = component.FindComponent<Dropdown<FlowTimeObject>>();
+
+            Assert.That(dropdown.Instance.ElementToString(ticketTimeObject), Is.EqualTo("Ticket maintenance"));
+        }
+
+        [Test]
+        public async Task TimeObjectSelector_RestoresSelectedTicketTimeObjectById()
+        {
+            FlowTimeObject ticketTimeObject = new() { Id = -17, Name = "Ticket maintenance" };
+
+            await using BunitContext context = new();
+            context.Services.AddSingleton<ApiConnection>(new UiRequestWorkflowTest.RequestWorkflowApiConn());
+            context.Services.AddSingleton<UserConfig>(new UiRequestWorkflowTest.RequestWorkflowUserConfig { ReqUseFlowDb = false });
+            context.Services.AddSingleton<DomEventService>();
+
+            IRenderedComponent<TimeObjectSelector> component = context.Render<TimeObjectSelector>(parameters => parameters
+                .Add(p => p.SelectedId, -17L)
+                .Add(p => p.SelectedName, ticketTimeObject.Name)
+                .Add(p => p.TicketTimeObjects, new List<FlowTimeObject> { ticketTimeObject }));
+
+            Dropdown<FlowTimeObject> dropdown = component.FindComponent<Dropdown<FlowTimeObject>>().Instance;
+
+            Assert.That(dropdown.SelectedElement?.Id, Is.EqualTo(-17));
+        }
+
+        [Test]
+        public async Task TimeObjectSelector_DisplaysConfiguredOriginSuffix()
+        {
+            await using BunitContext context = new();
+            context.Services.AddSingleton<ApiConnection>(new UiRequestWorkflowTest.RequestWorkflowApiConn());
+            context.Services.AddSingleton<UserConfig>(new UiRequestWorkflowTest.RequestWorkflowUserConfig
+            {
+                ReqUseFlowDb = false,
+                ReqTimeObjectOriginSuffixes = "{\"requester\":\"_user\"}"
+            });
+            context.Services.AddSingleton<DomEventService>();
+
+            IRenderedComponent<TimeObjectSelector> component = context.Render<TimeObjectSelector>(parameters => parameters
+                .Add(p => p.SelectedId, -17L)
+                .Add(p => p.SelectedOrigin, TimeObjectOrigin.Requester)
+                .Add(p => p.SelectedName, "maintenance")
+                .Add(p => p.OriginSuffixes, new Dictionary<string, string> { ["requester"] = "_user" })
+                .Add(p => p.TicketTimeObjects, new List<FlowTimeObject>
+                {
+                    new() { Id = -17, Name = "maintenance" }
+                }));
+
+            Dropdown<FlowTimeObject> dropdown = component.FindComponent<Dropdown<FlowTimeObject>>().Instance;
+
+            Assert.That(dropdown.ElementToString(dropdown.SelectedElement!), Is.EqualTo("maintenance_user"));
+        }
+
+        [Test]
+        public async Task TimeObjectSelector_SelectsTimeObjectAndUpdatesBothDates()
         {
             DateTime? targetBeginDate = null;
             DateTime? targetEndDate = null;
@@ -379,11 +449,14 @@ namespace FWO.Test
             await using BunitContext context = new();
             context.Services.AddSingleton<ApiConnection>(new UiRequestWorkflowTest.RequestWorkflowApiConn());
             context.Services.AddSingleton<UserConfig>(new UiRequestWorkflowTest.RequestWorkflowUserConfig());
-            IRenderedComponent<DisplayTaskTargetDates> component = context.Render<DisplayTaskTargetDates>(parameters => parameters
-                .Add(p => p.TargetBeginDateChanged, EventCallback.Factory.Create<DateTime?>(this, value => targetBeginDate = value))
-                .Add(p => p.TargetEndDateChanged, EventCallback.Factory.Create<DateTime?>(this, value => targetEndDate = value)));
+            IRenderedComponent<TimeObjectSelector> component = context.Render<TimeObjectSelector>(parameters => parameters
+                .Add(p => p.TimeObjectSelected, EventCallback.Factory.Create<FlowTimeObject>(this, value =>
+                {
+                    targetBeginDate = value.StartTime;
+                    targetEndDate = value.EndTime;
+                })));
 
-            await UiRequestWorkflowTest.InvokePrivateTask(component.Instance, "SelectFlowTimeObject", timeObject);
+            await UiRequestWorkflowTest.InvokePrivateTask(component.Instance, "SelectTimeObject", timeObject);
 
             Assert.Multiple(() =>
             {
@@ -393,92 +466,24 @@ namespace FWO.Test
         }
 
         [Test]
-        public async Task DisplayTaskTargetDates_ChangingDateClearsSelectedFlowTimeObject()
+        public async Task TimeObjectSelector_ClearingSelectionClearsIdAndName()
         {
-            DateTime? targetEndDate = new DateTime(2026, 8, 1, 17, 0, 0);
-            FlowTimeObject timeObject = new()
-            {
-                Id = 303,
-                Name = "Business Hours",
-                StartTime = new DateTime(2026, 8, 1, 8, 0, 0),
-                EndTime = targetEndDate,
-                ShowInRequestModule = true
-            };
+            long? selectedId = 302;
+            string? selectedName = "Nightly window";
 
             await using BunitContext context = new();
             context.Services.AddSingleton<ApiConnection>(new UiRequestWorkflowTest.RequestWorkflowApiConn());
-            context.Services.AddSingleton<UserConfig>(new UiRequestWorkflowTest.RequestWorkflowUserConfig
-            {
-                ReqUseFlowDb = true,
-                ReqFlowIntegration = new FlowIntegrationConfig
-                {
-                    SelectTimeObjects = FlowIntegrationObjectSelectionOptions.Both
-                }.ToConfigValue()
-            });
-            context.Services.AddSingleton<DomEventService>();
-            IRenderedComponent<DisplayTaskTargetDates> component = context.Render<DisplayTaskTargetDates>(parameters => parameters
-                .Add(p => p.TargetEndDate, targetEndDate)
-                .Add(p => p.TargetEndDateChanged, EventCallback.Factory.Create<DateTime?>(this, value => targetEndDate = value))
-                .Add(p => p.CanEditTargetEndDate, true));
-            SetMember(component.Instance, "selectedFlowTimeObjectInt", timeObject);
-            await component.Find("input[type=date]").InputAsync(new ChangeEventArgs { Value = "2026-08-02" });
-            IRenderedComponent<Dropdown<FlowTimeObject>> refreshedDropdown = component.FindComponent<Dropdown<FlowTimeObject>>();
+            context.Services.AddSingleton<UserConfig>(new UiRequestWorkflowTest.RequestWorkflowUserConfig());
+            IRenderedComponent<TimeObjectSelector> component = context.Render<TimeObjectSelector>(parameters => parameters
+                .Add(p => p.SelectedIdChanged, EventCallback.Factory.Create<long?>(this, value => selectedId = value))
+                .Add(p => p.SelectedNameChanged, EventCallback.Factory.Create<string?>(this, value => selectedName = value)));
+
+            await UiRequestWorkflowTest.InvokePrivateTask(component.Instance, "ClearTimeObjectSelection");
 
             Assert.Multiple(() =>
             {
-                Assert.That(GetMember<FlowTimeObject?>(component.Instance, "selectedFlowTimeObjectInt"), Is.Null);
-                Assert.That(refreshedDropdown.Instance.SelectedElement, Is.Null);
-                Assert.That(refreshedDropdown.Find("input").GetAttribute("value"), Is.Empty);
-            });
-
-            SetMember(component.Instance, "selectedFlowTimeObjectInt", timeObject);
-            component.Find("input[type=date]").Change(new ChangeEventArgs { Value = "2026-08-03" });
-            Assert.That(component.FindComponent<Dropdown<FlowTimeObject>>().Find("input").GetAttribute("value"), Is.Empty);
-        }
-
-        [Test]
-        public async Task DisplayTaskTargetDates_ChangingBeginDateClearsSelectedFlowTimeObject()
-        {
-            DateTime? targetBeginDate = new DateTime(2026, 8, 1, 8, 0, 0);
-            DateTime? targetEndDate = new DateTime(2026, 8, 1, 17, 0, 0);
-            FlowTimeObject timeObject = new()
-            {
-                Id = 304,
-                Name = "Business Hours",
-                StartTime = targetBeginDate,
-                EndTime = targetEndDate,
-                ShowInRequestModule = true
-            };
-
-            await using BunitContext context = new();
-            context.Services.AddSingleton<ApiConnection>(new UiRequestWorkflowTest.RequestWorkflowApiConn());
-            context.Services.AddSingleton<UserConfig>(new UiRequestWorkflowTest.RequestWorkflowUserConfig
-            {
-                ReqUseFlowDb = true,
-                ReqFlowIntegration = new FlowIntegrationConfig
-                {
-                    SelectTimeObjects = FlowIntegrationObjectSelectionOptions.Both
-                }.ToConfigValue()
-            });
-            context.Services.AddSingleton<DomEventService>();
-            IRenderedComponent<DisplayTaskTargetDates> component = context.Render<DisplayTaskTargetDates>(parameters => parameters
-                .Add(p => p.TargetBeginDate, targetBeginDate)
-                .Add(p => p.TargetBeginDateChanged, EventCallback.Factory.Create<DateTime?>(this, value => targetBeginDate = value))
-                .Add(p => p.TargetEndDate, targetEndDate)
-                .Add(p => p.TargetEndDateChanged, EventCallback.Factory.Create<DateTime?>(this, value => targetEndDate = value))
-                .Add(p => p.CanEditTargetBeginDate, true)
-                .Add(p => p.CanEditTargetEndDate, true));
-
-            SetMember(component.Instance, "selectedFlowTimeObjectInt", timeObject);
-            await component.FindAll("input[type=date]")[0].InputAsync(new ChangeEventArgs { Value = "2026-08-02" });
-
-            IRenderedComponent<Dropdown<FlowTimeObject>> refreshedDropdown = component.FindComponent<Dropdown<FlowTimeObject>>();
-            Assert.Multiple(() =>
-            {
-                Assert.That(targetBeginDate, Is.EqualTo(new DateTime(2026, 8, 2, 8, 0, 0)));
-                Assert.That(GetMember<FlowTimeObject?>(component.Instance, "selectedFlowTimeObjectInt"), Is.Null);
-                Assert.That(refreshedDropdown.Instance.SelectedElement, Is.Null);
-                Assert.That(refreshedDropdown.Find("input").GetAttribute("value"), Is.Empty);
+                Assert.That(selectedId, Is.Null);
+                Assert.That(selectedName, Is.Null);
             });
         }
 

@@ -209,12 +209,24 @@
                 <input id="cbx_activate_path_analysis" type="checkbox" @bind="configData!.ReqActivatePathAnalysis">
             </div>
         </div>
+        <hr />
         <div class="form-group row" data-toggle="tooltip" title="@(userConfig.PureLine("H5576"))">
             <label class="col-form-label col-sm-3">@(userConfig.GetText("reqAllowedChangesByApprover")):</label>
             <div class="col-sm-4">
                 <button type="button" class="btn btn-sm btn-warning" @onclick="() => editAllowedChangesByApproverMode = true">
                     @(DisplayService.DisplayButton(userConfig, "edit", Icons.Edit))
                 </button>
+            </div>
+            <label class="col-form-label col-sm-2">@(userConfig.GetText("approval_edit_mode")):</label>
+            <div class="col-sm-3">
+                <Dropdown Id="sel_approval_edit_mode" ElementType="ApprovalEditMode"
+                          @bind-SelectedElement="configData!.ReqApprovalEditMode"
+                          ElementToString="ApprovalEditModeText"
+                          Elements="Enum.GetValues<ApprovalEditMode>()">
+                    <ElementTemplate Context="mode">
+                        @(ApprovalEditModeText(mode))
+                    </ElementTemplate>
+                </Dropdown>
             </div>
         </div>
         <div class="form-group row" data-toggle="tooltip" title="@(userConfig.PureLine("H5582a"))">
@@ -223,6 +235,15 @@
                 <textarea id="txt_implicit_approval_comment" class="form-control" rows="2" @bind="configData!.ReqImplicitApprovalComment"></textarea>
             </div>
         </div>
+        <div class="form-group row mt-2">
+            <label class="col-form-label col-sm-3">@(userConfig.GetText("time_object_origin_suffixes")):</label>
+            <div class="col-sm-2">
+                <button type="button" class="btn btn-sm btn-warning" @onclick="() => editTimeObjectOriginSuffixesMode = true">
+                    @(DisplayService.DisplayButton(userConfig, "edit", Icons.Edit))
+                </button>
+            </div>
+        </div>
+        <hr />
         <div class="form-group row mt-2" data-toggle="tooltip" title="@(userConfig.PureLine("H5566a") + "\r\n" + userConfig.PureLine("H5571") + "\r\n" + userConfig.PureLine("H5574") + "\r\n" +
                 userConfig.PureLine("H5577"))">
             <label class="col-form-label col-sm-3">@(userConfig.GetText("reqDeviceInput")):</label>
@@ -285,6 +306,7 @@ else
 {
     <AllowedChangesByApprover @bind-Display="editAllowedChangesByApproverMode" ConfigValue="@configData.ReqAllowedChangesByApprover" ConfigValueChanged="HandleAllowedChangesByApproverChanged" />
     <FlowIntegration @bind-Display="editFlowIntegrationMode" ConfigValue="@configData.ReqFlowIntegration" ConfigValueChanged="HandleFlowIntegrationChanged" />
+    <TimeObjectOriginSuffixes @bind-Display="editTimeObjectOriginSuffixesMode" ConfigValue="@configData.ReqTimeObjectOriginSuffixes" ConfigValueChanged="HandleTimeObjectOriginSuffixesChanged" />
     <CreateRequestTaskSortConfigPopup @bind-Display="editCreateRequestTaskSortConfigMode" ConfigValue="@configData.ReqCreateRequestTaskSortConfig" ConfigValueChanged="HandleCreateRequestTaskSortConfigChanged" DisplayMessageInUi="DisplayMessageInUi" />
 }
 
@@ -299,6 +321,7 @@ else
     private bool InitComplete = false;
     private bool editAllowedChangesByApproverMode = false;
     private bool editFlowIntegrationMode = false;
+    private bool editTimeObjectOriginSuffixesMode = false;
     private bool editCreateRequestTaskSortConfigMode = false;
 
     private List<WfState> states = [];
@@ -370,6 +393,16 @@ else
             TicketHandlerDisplayMode.None => "ticket_handler_display_mode_none",
             TicketHandlerDisplayMode.CurrentPhase => "ticket_handler_display_mode_current_phase",
             TicketHandlerDisplayMode.AllActiveTasks => "ticket_handler_display_mode_all_active_tasks",
+            _ => "undefined"
+        });
+    }
+
+    private string ApprovalEditModeText(ApprovalEditMode mode)
+    {
+        return userConfig.GetText(mode switch
+        {
+            ApprovalEditMode.Classic => "approval_edit_mode_classic",
+            ApprovalEditMode.AccessTaskView => "approval_edit_mode_access_task_view",
             _ => "undefined"
         });
     }
@@ -469,6 +502,27 @@ else
             singleValueConfig.ReqFlowIntegration = configValue;
             await globalConfig.WriteToDatabase(singleValueConfig, apiConnection);
             configData.ReqFlowIntegration = configValue;
+            DisplayMessageInUi(null, userConfig.GetText("change_default"), userConfig.GetText("U5301"), false);
+        }
+        catch (Exception exception)
+        {
+            DisplayMessageInUi(exception, userConfig.GetText("change_default"), "", true);
+        }
+    }
+
+    private async Task HandleTimeObjectOriginSuffixesChanged(string configValue)
+    {
+        try
+        {
+            if (configData == null)
+            {
+                throw new ArgumentException("Time-object origin suffix settings were updated before the settings page was initialized.");
+            }
+
+            ConfigData singleValueConfig = await globalConfig.GetEditableConfig();
+            singleValueConfig.ReqTimeObjectOriginSuffixes = configValue;
+            await globalConfig.WriteToDatabase(singleValueConfig, apiConnection);
+            configData.ReqTimeObjectOriginSuffixes = configValue;
             DisplayMessageInUi(null, userConfig.GetText("change_default"), userConfig.GetText("U5301"), false);
         }
         catch (Exception exception)

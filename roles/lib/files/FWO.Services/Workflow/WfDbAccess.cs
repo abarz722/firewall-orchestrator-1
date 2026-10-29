@@ -296,7 +296,8 @@ namespace FWO.Services.Workflow
                 ["name"] = element.Name,
                 ["startTime"] = element.StartTime?.ToUniversalTime(),
                 ["endTime"] = element.EndTime?.ToUniversalTime(),
-                ["timeObjId"] = element.TimeObjId
+                ["timeObjId"] = element.TimeObjId,
+                ["timeObjectTaskId"] = element.TimeObjectTaskId
             };
         }
 

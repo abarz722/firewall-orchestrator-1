@@ -51,6 +51,8 @@ namespace FWO.Data.Workflow
             StartTime = element.StartTime;
             EndTime = element.EndTime;
             TimeObjId = element.TimeObjId;
+            FlowTimeObjectId = element.FlowTimeObjectId;
+            TimeObjectTaskId = element.TimeObjectTaskId;
         }
     }
 }

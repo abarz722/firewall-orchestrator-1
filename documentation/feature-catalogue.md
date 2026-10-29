@@ -91,6 +91,7 @@ For a chronological, version-by-version listing (8.0 onwards) see
 | Workflow configuration transfer with selected-phase export, custom file names, merge support, and state-definition validation | 9.8.2 |
 | Implementation tasks created by the state action "Create implementation tasks", controlled per gateway and management by device specific settings | 9.8.3 |
 | Phase-specific workflow promotion mode (ticket, task, or both) | 9.8.4 |
+| Ticket-local time objects are referenced from access tasks through their object-create task | 9.8.5 |
 
 ## Recertification
 

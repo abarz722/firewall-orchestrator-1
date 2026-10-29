@@ -92,6 +92,7 @@ internal sealed class WorkflowTicketBuilder
             TaskType = WfTaskType.object_create.ToString(),
             RequestAction = RequestAction.create.ToString(),
             StateId = ticketStateId,
+            AdditionalInfo = entity.Kind == WorkflowTicketEntityKind.TimeObject ? BuildAdditionalInfo(entity) : null,
             Elements = [BuildObjectElement(entity)],
             Approvals = [BuildApproval(ticketStateId)],
             Locked = true
@@ -125,7 +126,10 @@ internal sealed class WorkflowTicketBuilder
                 RequestAction = RequestAction.create.ToString(),
                 Name = entity.DisplayName,
                 StartTime = entity.TimeStart,
-                EndTime = entity.TimeEnd
+                EndTime = entity.TimeEnd,
+                TimeObjId = null,
+                TimeObjectEntityId = entity.Id < 0 ? entity.Id : null,
+                FlowTimeObjectId = entity.Id > 0 ? entity.Id : null
             },
             _ => throw new ArgumentException($"Entity kind {entity.Kind} cannot be emitted as an object task.")
         };
@@ -393,6 +397,21 @@ internal sealed class WorkflowTicketBuilder
         if (taskContext.Validation.ValidationErrors.Count > errorCount)
         {
             return null;
+        }
+
+        if (timeEntity != null)
+        {
+            elements.Add(new WfReqElement
+            {
+                Field = ElemFieldType.time.ToString(),
+                RequestAction = RequestAction.create.ToString(),
+                Name = timeEntity.DisplayName,
+                StartTime = timeEntity.TimeStart,
+                EndTime = timeEntity.TimeEnd,
+                TimeObjId = null,
+                TimeObjectEntityId = timeEntity.Id < 0 ? timeEntity.Id : null,
+                FlowTimeObjectId = timeEntity.Id > 0 ? timeEntity.Id : null
+            });
         }
 
         return new WfReqTask
@@ -679,7 +698,7 @@ internal sealed class WorkflowTicketBuilder
         Dictionary<string, string> additionalInfo = new();
         if (timeEntity != null)
         {
-            additionalInfo[AdditionalInfoKeys.TimeObjectId] = timeEntity.Id.ToString(CultureInfo.InvariantCulture);
+            additionalInfo[AdditionalInfoKeys.TimeObjectOrigin] = TimeObjectOrigin.Requester.ToString();
         }
         return JsonSerializer.Serialize(additionalInfo);
     }

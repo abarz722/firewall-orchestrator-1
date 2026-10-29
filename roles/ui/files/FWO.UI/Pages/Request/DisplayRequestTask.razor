@@ -68,14 +68,6 @@
                                 </div>
                             </div>
                         </div>
-                        <DisplayTaskTargetDates @bind-TargetBeginDate="WfHandler.ActReqTask.TargetBeginDate"
-                            @bind-TargetEndDate="WfHandler.ActReqTask.TargetEndDate"
-                            CanEditTargetBeginDate="CanEditReqTaskField(WorkflowEditableFieldKeys.ValidFrom)"
-                            CanEditTargetEndDate="CanEditReqTaskField(WorkflowEditableFieldKeys.ValidTo)"
-                            TargetDatesValidChanged="SetTargetDatesValid"
-                            ShowTargetBeginDate="ShowTaskField(WorkflowEditableFieldKeys.ValidFrom)"
-                            ShowTargetEndDate="ShowTaskField(WorkflowEditableFieldKeys.ValidTo)"
-                            HideFlowTimeObjectSelection="true" />
                     </div>
                 }
                 @if (actTaskType != WfTaskType.access || AccessTaskVisibility.ShowReason)
@@ -183,6 +175,17 @@
                             </NotAuthorized>
                         </ExecutionModeAuthorizeView>
                     }
+                    else if (WfHandler.ApproveReqTaskMode && FocusField != null && CanSaveReqTaskChanges())
+                    {
+                        <ExecutionModeAuthorizeView Roles="@($"{Roles.Admin}, {Roles.Approver}")">
+                            <Authorized>
+                                <button type="button" class="btn btn-sm btn-primary" @onclick:preventDefault @onclick="SaveApprovalTaskChanges">@(DisplayService.DisplayButton(userConfig, "save", Icons.Save))</button>
+                            </Authorized>
+                            <NotAuthorized>
+                                <button type="button" class="btn btn-sm btn-primary" disabled>@(DisplayService.DisplayButton(userConfig, "save", Icons.Save))</button>
+                            </NotAuthorized>
+                        </ExecutionModeAuthorizeView>
+                    }
                     else if (WfHandler.ApproveReqTaskMode)
                     {
                         <ExecutionModeAuthorizeView Roles="@($"{Roles.Admin}, {Roles.Approver}")">
@@ -242,6 +245,13 @@
 
     [Parameter]
     public Func<WfImplTask, Task> StartImplPhase { get; set; } = DefaultInit.DoNothing;
+
+    /// <summary>
+    /// When set, approval editing is restricted to the selected field. This is used by the
+    /// approval access-task overview; the existing task editor remains the editing surface.
+    /// </summary>
+    [Parameter]
+    public string? FocusField { get; set; }
 
 
     private List<WfTaskType> availableTaskTypes { get; set; } = [];
@@ -626,6 +636,31 @@
         }
     }
 
+    private async Task SaveApprovalTaskChanges()
+    {
+        if (WfHandler.ReadOnlyMode || WorkInProgress || !CanSaveReqTaskChanges())
+        {
+            return;
+        }
+        WorkInProgress = true;
+        try
+        {
+            if (await PrepareReqTaskForSave())
+            {
+                await WfHandler.ChangeReqTask(allowLockedApprovalUpdate: true);
+                await Close();
+            }
+        }
+        catch (Exception exception)
+        {
+            DisplayMessageInUi(exception, userConfig.GetText("save_task"), "", true);
+        }
+        finally
+        {
+            WorkInProgress = false;
+        }
+    }
+
     private async Task<bool> PrepareReqTaskForSave()
     {
         SyncMetadataState();
@@ -741,7 +776,10 @@
 
     private bool RejectInvalidAccessTask()
     {
-        if (elementEditor is null || elementEditor.SourceCount == 0 || elementEditor.DestinationCount == 0 || elementEditor.ServiceCount == 0 ||
+        WfReqElement? timeElement = TimeObjectElementHelper.Find(WfHandler.ActReqTask.Elements);
+        bool hasTimeObjectReference = TimeObjectElementHelper.GetSelectorId(timeElement) is long timeObjectId
+            && timeObjectId != 0;
+        if (!hasTimeObjectReference || elementEditor is null || elementEditor.SourceCount == 0 || elementEditor.DestinationCount == 0 || elementEditor.ServiceCount == 0 ||
             (metadataEditor?.NeedsManualDeviceSelection == true && selectedDevices.Count<Device>() == 0))
         {
             DisplayMessageInUi(null, userConfig.GetText("save_task"), userConfig.GetText("E5102"), true);
@@ -881,7 +919,13 @@
 
     private bool CanEditReqTaskField(string fieldKey)
     {
-        return ApproverAllowedChangesAccess.CanEditTaskField(GetApproverAllowedChanges(), GetTaskFieldEditContext(), fieldKey);
+        if (WfHandler.AddReqTaskMode)
+        {
+            return !WfHandler.ReadOnlyMode;
+        }
+
+        return (FocusField == null || FocusField == fieldKey)
+            && ApproverAllowedChangesAccess.CanEditTaskField(GetApproverAllowedChanges(), GetTaskFieldEditContext(), fieldKey);
     }
 
     private bool CanSaveReqTaskChanges()

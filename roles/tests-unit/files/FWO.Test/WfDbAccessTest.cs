@@ -512,6 +512,54 @@ namespace FWO.Test
         }
 
         [Test]
+        public async Task LinkTicketTimeObjectTasks_UsesBuilderCorrelationInsteadOfMatchingValues()
+        {
+            WfDbAccessTestApiConn apiConnection = new();
+            WfDbAccess dbAccess = await CreateHistoryDbAccess(apiConnection, WorkflowPhases.request);
+            WfReqTask sourceAccessTask = new()
+            {
+                TaskNumber = 1,
+                TaskType = WfTaskType.access.ToString(),
+                Elements = [new WfReqElement
+                {
+                    Field = ElemFieldType.time.ToString(),
+                    TimeObjectEntityId = -8,
+                    Name = "selected-time"
+                }]
+            };
+            WfReqTask sourceObjectTask = new()
+            {
+                TaskNumber = 2,
+                TaskType = WfTaskType.object_create.ToString(),
+                Elements = [new WfReqElement
+                {
+                    Field = ElemFieldType.time.ToString(),
+                    TimeObjectEntityId = -8,
+                    Name = "selected-time"
+                }]
+            };
+            WfReqTask savedAccessTask = new()
+            {
+                Id = 110,
+                TaskNumber = 1,
+                TaskType = WfTaskType.access.ToString(),
+                Elements = [new WfReqElement { Id = 111, Field = ElemFieldType.time.ToString() }]
+            };
+            WfReqTask savedObjectTask = new() { Id = 210, TaskNumber = 2, TaskType = WfTaskType.object_create.ToString() };
+
+            MethodInfo method = typeof(WfDbAccess).GetMethod("LinkTicketTimeObjectTasks", BindingFlags.NonPublic | BindingFlags.Instance)!;
+            await (Task)method.Invoke(dbAccess,
+                [new WfTicket { Tasks = [sourceAccessTask, sourceObjectTask] },
+                 new WfTicket { Tasks = [savedAccessTask, savedObjectTask] }])!;
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(TimeObjectElementHelper.Find(savedAccessTask.Elements)?.TimeObjectTaskId, Is.EqualTo(210));
+                Assert.That(apiConnection.UpdateReqElementCallCount, Is.EqualTo(1));
+            });
+        }
+
+        [Test]
         public async Task AddTicketToDb_DoesNotWrapTicketCreationFailures()
         {
             WfDbAccessTestApiConn apiConn = new()
