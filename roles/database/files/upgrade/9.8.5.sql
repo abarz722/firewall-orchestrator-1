@@ -1,3 +1,6 @@
+ALTER TABLE request.state_matrix_phase
+    ADD COLUMN IF NOT EXISTS promotion_mode varchar NOT NULL DEFAULT 'Both';
+
 ALTER TABLE request.reqelement
     ADD COLUMN IF NOT EXISTS time_object_task_id bigint;
 
