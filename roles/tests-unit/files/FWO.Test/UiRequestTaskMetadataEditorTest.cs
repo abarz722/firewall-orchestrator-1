@@ -326,6 +326,49 @@ internal class UiRequestTaskMetadataEditorTest
         });
     }
 
+    [Test]
+    public void SelectedFlowTimeObjectNameAndTicketTimeObjects_UseTaskTimeElements()
+    {
+        DateTime begin = new(2026, 8, 1, 8, 0, 0);
+        DateTime end = new(2026, 8, 1, 17, 0, 0);
+        WfReqTask accessTask = new()
+        {
+            Id = 20,
+            TaskType = WfTaskType.access.ToString(),
+            TargetBeginDate = begin,
+            TargetEndDate = end
+        };
+        WfReqTask objectTask = new()
+        {
+            Id = 77,
+            TaskType = WfTaskType.object_create.ToString(),
+            Elements = [new WfReqElement
+            {
+                Field = ElemFieldType.time.ToString(),
+                TimeObjId = -17,
+                Name = "ticket-window",
+                StartTime = begin,
+                EndTime = end
+            }]
+        };
+        RequestTaskMetadataEditor component = CreateComponent(
+            new WfHandler { ActReqTask = accessTask, ActTicket = new WfTicket { Tasks = [accessTask, objectTask] } },
+            new SimulatedUserConfig());
+
+        PropertyInfo nameProperty = typeof(RequestTaskMetadataEditor).GetProperty("SelectedFlowTimeObjectName",
+            BindingFlags.NonPublic | BindingFlags.Instance)!;
+        PropertyInfo ticketObjectsProperty = typeof(RequestTaskMetadataEditor).GetProperty("TicketTimeObjects",
+            BindingFlags.NonPublic | BindingFlags.Instance)!;
+        IReadOnlyList<FlowTimeObject> ticketObjects = (IReadOnlyList<FlowTimeObject>)ticketObjectsProperty.GetValue(component)!;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(nameProperty.GetValue(component), Is.EqualTo("ticket-window"));
+            Assert.That(ticketObjects.Select(timeObject => timeObject.Id), Is.EquivalentTo([-17L]));
+            Assert.That(ticketObjects.Single().Name, Is.EqualTo("ticket-window"));
+        });
+    }
+
     private static RequestTaskMetadataEditor CreateComponent(WfHandler handler, SimulatedUserConfig? userConfig = null,
         IEnumerable<Management>? managements = null, WfTaskType? taskType = null)
     {

@@ -97,7 +97,7 @@
                 selectionVersion++;
             }
         }
-        else if (!SelectedId.HasValue)
+        else if (!SelectedId.HasValue && string.IsNullOrWhiteSpace(SelectedName))
         {
             selectedTimeObjectInternal = null;
             selectionVersion++;

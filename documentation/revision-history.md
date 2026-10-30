@@ -2,9 +2,8 @@
 
 ## 9.8.5 - 29.10.2026
 - request workflow: access-task time objects reference their ticket-local object-create task, so updates to the defining task remain consistent
-
-## 9.8.4 - 26.10.2026
 - workflow state matrix: configure whether phases after request are promoted from the ticket, from individual tasks, or both; the request phase remains ticket-driven
+
 ## 9.8.4 - 29.10.2026
 - installer: no longer opens the unauthenticated rsyslog TCP receiver on port 514 and removes it from existing installations; no component used it. The rsyslog rules only route messages of local inputs into the fworch log files, so remote senders cannot forge audit or alert entries (GHSA-rfvm-mccf-7q26). Remote senders that pointed at port 514 have to be configured on a separate log server
 - importer: sub-managements set to "do not import" are skipped by the import of their super manager instead of having all their rules and objects marked removed (FortiManager ADOMs, Check Point domains; GHSA-hj46-639g-mxq2). A forced import still imports them

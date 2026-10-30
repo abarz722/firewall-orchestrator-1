@@ -640,6 +640,46 @@ internal class UiRequestTaskElementEditorTest
     }
 
     [Test]
+    public void MarkGroupMemberRemoved_PersistedNetworkMemberGetsDeleteAction()
+    {
+        WfReqTask reqTask = new() { Id = 42, TaskType = WfTaskType.group_modify.ToString() };
+        reqTask.Elements.Add(new WfReqElement
+        {
+            Id = 8,
+            Field = ElemFieldType.source.ToString(),
+            NetworkId = 17,
+            Name = "member"
+        });
+        RequestTaskElementEditor component = CreateComponent(reqTask, WfTaskType.group_modify);
+
+        typeof(RequestTaskElementEditor).GetMethod("MarkGroupMemberRemoved", BindingFlags.NonPublic | BindingFlags.Instance,
+            binder: null, types: [typeof(NwObjectElement), typeof(ElemFieldType)], modifiers: null)!
+            .Invoke(component, [new NwObjectElement { ElemId = 8, NetworkId = 17, Name = "member" }, ElemFieldType.source]);
+
+        Assert.That(reqTask.Elements.Single().RequestAction, Is.EqualTo(RequestAction.delete.ToString()));
+    }
+
+    [Test]
+    public void MarkGroupMemberRemoved_NewServiceMemberIsRemovedWhenItWasAdded()
+    {
+        WfReqTask reqTask = new() { Id = 42, TaskType = WfTaskType.group_modify.ToString() };
+        WfReqElement requestElement = new()
+        {
+            Field = ElemFieldType.service.ToString(),
+            Name = "new-service",
+            RequestAction = RequestAction.create.ToString()
+        };
+        reqTask.Elements.Add(requestElement);
+        RequestTaskElementEditor component = CreateComponent(reqTask, WfTaskType.group_modify);
+
+        typeof(RequestTaskElementEditor).GetMethod("MarkGroupMemberRemoved", BindingFlags.NonPublic | BindingFlags.Instance,
+            binder: null, types: [typeof(NwServiceElement)], modifiers: null)!
+            .Invoke(component, [new NwServiceElement { Name = "new-service" }]);
+
+        Assert.That(reqTask.Elements, Is.Empty);
+    }
+
+    [Test]
     public void ClearSelectedGroup_IgnoresNonGroupTasks()
     {
         WfReqTask reqTask = new() { Id = 42, TaskType = WfTaskType.access.ToString() };

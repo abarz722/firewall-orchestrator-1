@@ -1,5 +1,6 @@
 using Bunit;
 using FWO.Api.Client;
+using FWO.Api.Client.Queries;
 using FWO.Config.Api;
 using FWO.Data;
 using FWO.Data.Flow;
@@ -38,6 +39,17 @@ internal class UiSharedEditorTest
     }
 
     [Test]
+    public async Task OwnerEditor_OwnerChangedUpdatesDraft()
+    {
+        OwnerEditor component = new();
+        FwoOwner owner = new() { Id = 8, Name = "Changed" };
+
+        await UiRequestWorkflowTest.InvokePrivateTask(component, "OwnerChanged", owner);
+
+        Assert.That(UiRequestWorkflowTest.GetMember<FwoOwner>(component, "selectedOwner"), Is.SameAs(owner));
+    }
+
+    [Test]
     public async Task RuleActionEditor_SavesSelectedAction()
     {
         await using BunitContext context = CreateContext();
@@ -53,6 +65,17 @@ internal class UiSharedEditorTest
         cut.Find("button.btn-primary").Click();
 
         Assert.That(saved?.Id, Is.EqualTo(3));
+    }
+
+    [Test]
+    public async Task RuleActionEditor_RuleActionChangedUpdatesDraft()
+    {
+        RuleActionEditor component = new();
+        RuleAction action = new() { Id = 9, Name = "deny" };
+
+        await UiRequestWorkflowTest.InvokePrivateTask(component, "RuleActionChanged", action);
+
+        Assert.That(UiRequestWorkflowTest.GetMember<RuleAction?>(component, "selectedRuleAction"), Is.SameAs(action));
     }
 
     [Test]
@@ -74,6 +97,17 @@ internal class UiSharedEditorTest
     }
 
     [Test]
+    public async Task TrackingEditor_TrackingChangedUpdatesDraft()
+    {
+        TrackingEditor component = new();
+        Tracking tracking = new() { Id = 10, Name = "changed-tracking" };
+
+        await UiRequestWorkflowTest.InvokePrivateTask(component, "TrackingChanged", tracking);
+
+        Assert.That(UiRequestWorkflowTest.GetMember<Tracking?>(component, "selectedTracking"), Is.SameAs(tracking));
+    }
+
+    [Test]
     public async Task ManagementEditor_SavesSelectedManagement()
     {
         await using BunitContext context = CreateContext();
@@ -89,6 +123,17 @@ internal class UiSharedEditorTest
         cut.Find("button.btn-primary").Click();
 
         Assert.That(saved?.Id, Is.EqualTo(5));
+    }
+
+    [Test]
+    public async Task ManagementEditor_ManagementChangedUpdatesDraft()
+    {
+        ManagementEditor component = new();
+        Management management = new() { Id = 11, Name = "changed-management" };
+
+        await UiRequestWorkflowTest.InvokePrivateTask(component, "ManagementChanged", management);
+
+        Assert.That(UiRequestWorkflowTest.GetMember<Management?>(component, "selectedManagement"), Is.SameAs(management));
     }
 
     [Test]
@@ -232,7 +277,36 @@ internal class UiSharedEditorTest
     }
 
     [Test]
-    public void ApprovalAccessTaskView_GroupsOnlyMatchingBundledTasks()
+    public async Task TargetDatesEditor_ValidationAndNameAndEndDateCallbacksUpdateModel()
+    {
+        await using BunitContext context = CreateContext();
+        IRenderedComponent<TargetDatesEditor> cut = context.Render<TargetDatesEditor>(parameters => parameters
+            .Add(p => p.Display, true)
+            .Add(p => p.Model, new TargetDatesEditorModel
+            {
+                FlowTimeObjectId = 12,
+                FlowTimeObjectName = "old-name",
+                EndDate = new DateTime(2026, 8, 1)
+            }));
+
+        UiRequestWorkflowTest.GetPrivateMethod(typeof(TargetDatesEditor), "SetTargetDatesValid")
+            .Invoke(cut.Instance, [false]);
+        await UiRequestWorkflowTest.InvokePrivateTask(cut.Instance, "OnSelectedTimeObjectNameChanged", "new-name");
+        DateTime end = new(2026, 8, 2);
+        await UiRequestWorkflowTest.InvokePrivateTask(cut.Instance, "OnTargetEndDateChanged", end);
+
+        TargetDatesEditorModel editingModel = UiRequestWorkflowTest.GetMember<TargetDatesEditorModel>(cut.Instance, "editingModel");
+        Assert.Multiple(() =>
+        {
+            Assert.That(UiRequestWorkflowTest.GetMember<bool>(cut.Instance, "targetDatesValid"), Is.False);
+            Assert.That(editingModel.FlowTimeObjectName, Is.Null);
+            Assert.That(editingModel.EndDate, Is.EqualTo(end));
+            Assert.That(editingModel.FlowTimeObjectId, Is.Null);
+        });
+    }
+
+    [Test]
+    public void ApprovalTaskDetailsView_GroupsOnlyMatchingBundledTasks()
     {
         SimulatedUserConfig userConfig = new()
         {
@@ -244,11 +318,11 @@ internal class UiSharedEditorTest
         WfReqTask differentState = BundledAccessTask(3, 7, 3);
         WfReqTask unbundled = new() { Id = 4, TaskType = WfTaskType.access.ToString() };
         WfHandler handler = new() { ActTicket = new WfTicket { Tasks = [first, second, differentState, unbundled] } };
-        ApprovalAccessTaskView component = new();
-        UiRequestWorkflowTest.SetMember(component, nameof(ApprovalAccessTaskView.WfHandler), handler);
+        ApprovalTaskDetailsView component = new();
+        UiRequestWorkflowTest.SetMember(component, nameof(ApprovalTaskDetailsView.WfHandler), handler);
         UiRequestWorkflowTest.SetMember(component, "userConfig", userConfig);
 
-        MethodInfo method = UiRequestWorkflowTest.GetPrivateMethod(typeof(ApprovalAccessTaskView), "GetTaskGroups");
+        MethodInfo method = UiRequestWorkflowTest.GetPrivateMethod(typeof(ApprovalTaskDetailsView), "GetTaskGroups");
         List<List<WfReqTask>> groups = [.. (IEnumerable<List<WfReqTask>>)method.Invoke(component, [])!];
 
         Assert.Multiple(() =>
@@ -260,12 +334,12 @@ internal class UiSharedEditorTest
     }
 
     [Test]
-    public void ApprovalAccessTaskView_AppliesFlowTimeObjectModelToTask()
+    public void ApprovalTaskDetailsView_AppliesFlowTimeObjectModelToTask()
     {
         WfReqTask task = new() { Id = 10, StateId = 2, TaskType = WfTaskType.access.ToString() };
         WfHandler handler = new() { ActReqTask = task, ActTicket = new WfTicket { Tasks = [task] } };
-        ApprovalAccessTaskView component = new();
-        UiRequestWorkflowTest.SetMember(component, nameof(ApprovalAccessTaskView.WfHandler), handler);
+        ApprovalTaskDetailsView component = new();
+        UiRequestWorkflowTest.SetMember(component, nameof(ApprovalTaskDetailsView.WfHandler), handler);
         UiRequestWorkflowTest.SetMember(component, "userConfig", new SimulatedUserConfig());
         TargetDatesEditorModel model = new()
         {
@@ -275,7 +349,7 @@ internal class UiSharedEditorTest
             EndDate = new DateTime(2026, 8, 1, 17, 0, 0)
         };
 
-        MethodInfo method = UiRequestWorkflowTest.GetPrivateMethod(typeof(ApprovalAccessTaskView), "ApplyTimeObjectModel");
+        MethodInfo method = UiRequestWorkflowTest.GetPrivateMethod(typeof(ApprovalTaskDetailsView), "ApplyTimeObjectModel");
         method.Invoke(component, [model]);
 
         WfReqElement? element = TimeObjectElementHelper.Find(task.Elements);
@@ -287,6 +361,585 @@ internal class UiSharedEditorTest
             Assert.That(element?.EndTime, Is.EqualTo(model.EndDate));
             Assert.That(task.GetAddInfoValue(AdditionalInfoKeys.TimeObjectOrigin), Is.EqualTo(TimeObjectOrigin.Approver.ToString()));
         });
+    }
+
+    [Test]
+    public void ApprovalTaskDetailsView_DisplayHelpersResolveTaskMetadata()
+    {
+        WfReqTask task = new()
+        {
+            Id = 10,
+            TaskType = WfTaskType.access.ToString(),
+            RuleAction = 3,
+            Tracking = 4,
+            CurrentHandler = new UiUser { Name = "handler" },
+            AssignedGroup = "assigned-group",
+            ManagementId = 8,
+            Owners = [new FwoOwnerDataHelper { Owner = new FwoOwner { Id = 1, Name = "owner" } }],
+            Elements = [new WfReqElement
+            {
+                Field = ElemFieldType.time.ToString(),
+                Name = "maintenance",
+                StartTime = new DateTime(2026, 8, 1, 8, 0, 0),
+                EndTime = new DateTime(2026, 8, 1, 17, 0, 0)
+            }]
+        };
+        ApprovalTaskDetailsView component = new();
+        UiRequestWorkflowTest.SetMember(component, nameof(ApprovalTaskDetailsView.WfHandler),
+            new WfHandler { ActTicket = new WfTicket { Tasks = [task] } });
+        UiRequestWorkflowTest.SetMember(component, "userConfig", new SimulatedUserConfig());
+        UiRequestWorkflowTest.SetMember(component, "ruleActions", new List<RuleAction> { new() { Id = 3, Name = "allow" } });
+        UiRequestWorkflowTest.SetMember(component, "trackings", new List<Tracking> { new() { Id = 4, Name = "log" } });
+        ApprovalTaskDisplayLogic displayLogic = new(
+            new WfHandler { ActTicket = new WfTicket { Tasks = [task] } },
+            new SimulatedUserConfig(),
+            [new RuleAction { Id = 3, Name = "allow" }],
+            [new Tracking { Id = 4, Name = "log" }],
+            [],
+            [],
+            false);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(InvokeApprovalHelper<string>(component, "TaskIds", new[] { task }), Is.EqualTo("10"));
+            Assert.That(displayLogic.Handlers([task]), Is.EqualTo("handler"));
+            Assert.That(displayLogic.AssignedGroups([task]), Is.EqualTo("assigned-group"));
+            Assert.That(displayLogic.ManagementIds([task]), Is.EqualTo("8"));
+            Assert.That(displayLogic.Owners([task]), Is.EqualTo("owner"));
+            Assert.That(displayLogic.RuleActions([task]), Is.EqualTo("allow"));
+            Assert.That(displayLogic.Trackings([task]), Is.EqualTo("log"));
+            Assert.That(displayLogic.TimeObjectDisplay([task], new AccessTaskFieldVisibilityConfig()), Does.StartWith("maintenance ("));
+        });
+    }
+
+    [Test]
+    public async Task ApprovalTaskDetailsView_RendersAccessTaskAndInitializesLookupData()
+    {
+        await using BunitContext context = CreateContext();
+        UiRequestWorkflowTest.RequestWorkflowApiConn apiConnection =
+            (UiRequestWorkflowTest.RequestWorkflowApiConn)context.Services.GetRequiredService<ApiConnection>();
+        apiConnection.Managements = [new Management { Id = 8, Name = "Management" }];
+
+        ApproverAllowedChangesConfig allowedChanges = new();
+        foreach (string field in new[]
+        {
+            WorkflowEditableFieldKeys.Title,
+            WorkflowEditableFieldKeys.Owner,
+            WorkflowEditableFieldKeys.Management,
+            WorkflowEditableFieldKeys.RuleAction,
+            WorkflowEditableFieldKeys.Track,
+            WorkflowEditableFieldKeys.ValidFrom,
+            WorkflowEditableFieldKeys.ValidTo,
+            WorkflowEditableFieldKeys.Reason,
+            WorkflowEditableFieldKeys.FreeText,
+            WorkflowEditableFieldKeys.Source,
+            WorkflowEditableFieldKeys.Destination,
+            WorkflowEditableFieldKeys.Services
+        })
+        {
+            allowedChanges.SetTaskField(WfTaskType.access, field, true);
+        }
+
+        SimulatedUserConfig userConfig = (SimulatedUserConfig)context.Services.GetRequiredService<UserConfig>();
+        userConfig.ReqAllowedChangesByApprover = allowedChanges.ToConfigValue();
+        userConfig.ReqTicketFieldVisibility = new TicketFieldVisibilityConfig
+        {
+            AccessTask = new AccessTaskFieldVisibilityConfig { ShowFreeText = true }
+        }.ToConfigValue();
+
+        WfReqTask task = new()
+        {
+            Id = 21,
+            StateId = 2,
+            Title = "Access task",
+            TaskType = WfTaskType.access.ToString(),
+            CurrentHandler = new UiUser { Name = "handler" },
+            AssignedGroup = "approvers",
+            RuleAction = 3,
+            Tracking = 4,
+            ManagementId = 8,
+            Reason = "reason",
+            FreeText = "free text",
+            TargetBeginDate = new DateTime(2026, 8, 1, 8, 0, 0),
+            TargetEndDate = new DateTime(2026, 8, 1, 17, 0, 0),
+            Owners = [new FwoOwnerDataHelper { Owner = new FwoOwner { Id = 7, Name = "owner" } }],
+            Elements =
+            [
+                new WfReqElement { Field = ElemFieldType.source.ToString(), IpString = "10.0.0.1", Name = "source" },
+                new WfReqElement { Field = ElemFieldType.destination.ToString(), IpString = "10.0.0.2", Name = "destination" },
+                new WfReqElement { Field = ElemFieldType.service.ToString(), Port = 443, ProtoId = 6, Name = "https" },
+                new WfReqElement
+                {
+                    Field = ElemFieldType.time.ToString(),
+                    Name = "maintenance",
+                    StartTime = new DateTime(2026, 8, 1, 8, 0, 0),
+                    EndTime = new DateTime(2026, 8, 1, 17, 0, 0)
+                }
+            ]
+        };
+        WfHandler handler = new()
+        {
+            ActTicket = new WfTicket { Tasks = [task] },
+            Managements = apiConnection.Managements,
+            AllOwners = [new FwoOwner { Id = 7, Name = "owner" }]
+        };
+        bool? displayChanged = null;
+
+        IRenderedComponent<ApprovalTaskDetailsView> cut = context.Render<ApprovalTaskDetailsView>(parameters => parameters
+            .Add(p => p.Display, true)
+            .Add(p => p.DisplayChanged, value => displayChanged = value)
+            .Add(p => p.WfHandler, handler)
+            .Add(p => p.States, new WfStateDict { Name = { [2] = "Planning" } }));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(cut.FindAll(".card"), Has.Count.EqualTo(1));
+            Assert.That(cut.Markup, Does.Contain("Access task"));
+            Assert.That(cut.Markup, Does.Contain("handler"));
+            Assert.That(cut.Markup, Does.Contain("source"));
+            Assert.That(cut.Markup, Does.Contain("destination"));
+            Assert.That(cut.Markup, Does.Contain("https"));
+            Assert.That(cut.Markup, Does.Contain("maintenance"));
+            Assert.That(apiConnection.Queries, Does.Contain(StmQueries.getRuleActions));
+            Assert.That(apiConnection.Queries, Does.Contain(StmQueries.getTracking));
+            Assert.That(apiConnection.Queries, Does.Contain(StmQueries.getIpProtocols));
+        });
+
+        cut.Find("button.btn-secondary").Click();
+        Assert.That(cut.Markup, Does.Contain("unresolved_groups_view"));
+
+        cut.Find("button.btn-primary").Click();
+        Assert.That(displayChanged, Is.False);
+    }
+
+    [Test]
+    public async Task ApprovalTaskDetailsView_HidesConfiguredFieldsAndEditButtons()
+    {
+        await using BunitContext context = CreateContext();
+        SimulatedUserConfig userConfig = (SimulatedUserConfig)context.Services.GetRequiredService<UserConfig>();
+        userConfig.ReqTicketFieldVisibility = new TicketFieldVisibilityConfig
+        {
+            AccessTask = new AccessTaskFieldVisibilityConfig
+            {
+                ShowOwner = false,
+                ShowManagement = false,
+                ShowValidFrom = false,
+                ShowValidTo = false,
+                ShowReason = false,
+                ShowFreeText = false
+            }
+        }.ToConfigValue();
+
+        WfReqTask task = new() { Id = 22, StateId = 1, Title = "Hidden metadata", TaskType = WfTaskType.access.ToString() };
+        WfHandler handler = new() { ActTicket = new WfTicket { Tasks = [task] } };
+
+        IRenderedComponent<ApprovalTaskDetailsView> cut = context.Render<ApprovalTaskDetailsView>(parameters => parameters
+            .Add(p => p.Display, true)
+            .Add(p => p.WfHandler, handler));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(cut.Markup, Does.Not.Contain("owner:"));
+            Assert.That(cut.Markup, Does.Not.Contain("management:"));
+            Assert.That(cut.Markup, Does.Not.Contain("time_object:"));
+            Assert.That(cut.Markup, Does.Not.Contain("reason:"));
+            Assert.That(cut.Markup, Does.Not.Contain("free_text:"));
+            Assert.That(cut.FindAll("button.btn-warning"), Is.Empty);
+        });
+    }
+
+    [Test]
+    public async Task ApprovalTaskDetailsView_OpensAllFieldEditors()
+    {
+        WfReqTask task = new()
+        {
+            Id = 23,
+            TaskType = WfTaskType.access.ToString(),
+            Owners = [new FwoOwnerDataHelper { Owner = new FwoOwner { Id = 7, Name = "owner" } }],
+            Elements = [new WfReqElement
+            {
+                Field = ElemFieldType.time.ToString(),
+                Name = "window",
+                StartTime = new DateTime(2026, 8, 1, 8, 0, 0),
+                EndTime = new DateTime(2026, 8, 1, 17, 0, 0)
+            }]
+        };
+        WfHandler handler = new()
+        {
+            ActTicket = new WfTicket { Tasks = [task] },
+            AllOwners = [new FwoOwner { Id = 7, Name = "owner" }],
+            Managements = [new Management { Id = 8, Name = "management" }]
+        };
+        ApprovalTaskDetailsView component = new();
+        UiRequestWorkflowTest.SetMember(component, nameof(ApprovalTaskDetailsView.WfHandler), handler);
+        UiRequestWorkflowTest.SetMember(component, "userConfig", new SimulatedUserConfig());
+
+        await UiRequestWorkflowTest.InvokePrivateTask(component, "OpenOwnerEditor", task);
+        await UiRequestWorkflowTest.InvokePrivateTask(component, "OpenRuleActionEditor", task);
+        await UiRequestWorkflowTest.InvokePrivateTask(component, "OpenTrackingEditor", task);
+        await UiRequestWorkflowTest.InvokePrivateTask(component, "OpenManagementEditor", task);
+        await UiRequestWorkflowTest.InvokePrivateTask(component, "OpenTargetDatesEditor", task, WorkflowEditableFieldKeys.ValidTo);
+        await UiRequestWorkflowTest.InvokePrivateTask(component, "OpenTextEditor", task, WorkflowEditableFieldKeys.Reason, "reason");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(UiRequestWorkflowTest.GetMember<bool>(component, "displayOwnerEditor"), Is.True);
+            Assert.That(UiRequestWorkflowTest.GetMember<bool>(component, "displayRuleActionEditor"), Is.True);
+            Assert.That(UiRequestWorkflowTest.GetMember<bool>(component, "displayTrackingEditor"), Is.True);
+            Assert.That(UiRequestWorkflowTest.GetMember<bool>(component, "displayManagementEditor"), Is.True);
+            Assert.That(UiRequestWorkflowTest.GetMember<bool>(component, "displayTargetDatesEditor"), Is.True);
+            Assert.That(UiRequestWorkflowTest.GetMember<bool>(component, "displayTextEditor"), Is.True);
+            Assert.That(UiRequestWorkflowTest.GetMember<string>(component, "textEditorKey"), Is.EqualTo(WorkflowEditableFieldKeys.Reason));
+            Assert.That(UiRequestWorkflowTest.GetMember<bool>(component, "textEditorMultiline"), Is.True);
+        });
+    }
+
+    [Test]
+    public async Task ApprovalTaskDetailsView_HandlesEmptySaveCallbacksAndCloseToggle()
+    {
+        ApprovalTaskDetailsView component = new();
+        UiRequestWorkflowTest.SetMember(component, "userConfig", new SimulatedUserConfig());
+        UiRequestWorkflowTest.SetMember(component, nameof(ApprovalTaskDetailsView.Display), true);
+
+        await InvokeApprovalTaskWithNull(component, "SaveOwner", new FwoOwner());
+        await InvokeApprovalTaskWithNull(component, "SaveRuleAction", null);
+        await InvokeApprovalTaskWithNull(component, "SaveTracking", null);
+        await InvokeApprovalTaskWithNull(component, "SaveManagement", null);
+        await InvokeApprovalTaskWithNull(component, "SaveTargetDates", new TargetDatesEditorModel());
+        await InvokeApprovalTaskWithNull(component, "SaveText", "text");
+
+        MethodInfo toggleMethod = typeof(ApprovalTaskDetailsView).GetMethod("ToggleAccessElementDisplay", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        MethodInfo closeMethod = typeof(ApprovalTaskDetailsView).GetMethod("Close", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        toggleMethod.Invoke(component, []);
+        ApprovalTaskElementDisplayMode displayMode = UiRequestWorkflowTest.GetMember<ApprovalTaskElementDisplayMode>(component, "accessElementDisplayMode");
+        closeMethod.Invoke(component, []);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(displayMode, Is.EqualTo(ApprovalTaskElementDisplayMode.Technical));
+            Assert.That(component.Display, Is.False);
+        });
+    }
+
+    [Test]
+    public async Task ApprovalTaskDetailsView_RendersObjectCreateAndModifyTasks()
+    {
+        await using BunitContext context = CreateContext();
+        SimulatedUserConfig userConfig = (SimulatedUserConfig)context.Services.GetRequiredService<UserConfig>();
+        ApproverAllowedChangesConfig allowedChanges = new();
+        allowedChanges.SetTaskField(WfTaskType.object_create, WorkflowEditableFieldKeys.Title, true);
+        allowedChanges.SetTaskField(WfTaskType.object_create, WorkflowEditableFieldKeys.Management, true);
+        allowedChanges.SetTaskField(WfTaskType.object_create, WorkflowEditableFieldKeys.Reason, true);
+        allowedChanges.SetTaskField(WfTaskType.object_modify, WorkflowEditableFieldKeys.Title, true);
+        allowedChanges.SetTaskField(WfTaskType.object_modify, WorkflowEditableFieldKeys.Reason, true);
+        userConfig.ReqAllowedChangesByApprover = allowedChanges.ToConfigValue();
+
+        WfReqTask createTask = new()
+        {
+            Id = 31,
+            StateId = 2,
+            Title = "Create server object",
+            TaskType = WfTaskType.object_create.ToString(),
+            ManagementId = 8,
+            Reason = "new server",
+            Elements = [new WfReqElement
+            {
+                Field = ElemFieldType.source.ToString(),
+                Name = "server-new",
+                IpString = "10.20.0.10",
+                RequestAction = RequestAction.create.ToString()
+            }]
+        };
+        WfReqTask modifyTask = new()
+        {
+            Id = 32,
+            StateId = 2,
+            Title = "Modify server object",
+            TaskType = WfTaskType.object_modify.ToString(),
+            Reason = "change address",
+            Elements =
+            [
+                new WfReqElement
+                {
+                    Field = ElemFieldType.source.ToString(),
+                    Name = "server-old",
+                    IpString = "10.20.0.10",
+                    NetworkId = 77,
+                    RequestAction = RequestAction.unchanged.ToString()
+                },
+                new WfReqElement
+                {
+                    Field = ElemFieldType.source.ToString(),
+                    Name = "server-new",
+                    IpString = "10.20.0.11",
+                    NetworkId = 77,
+                    RequestAction = RequestAction.modify.ToString()
+                }
+            ]
+        };
+        WfHandler handler = new()
+        {
+            ActTicket = new WfTicket { Tasks = [createTask, modifyTask] },
+            Managements = [new Management { Id = 8, Name = "Management" }]
+        };
+        StateMatrixDict matrices = new();
+        matrices.Matrices[WfTaskType.object_create.ToString()] = new StateMatrix { LowestInputState = 1, LowestEndState = 10 };
+        matrices.Matrices[WfTaskType.object_modify.ToString()] = new StateMatrix { LowestInputState = 1, LowestEndState = 10 };
+        UiRequestWorkflowTest.SetMember(handler, "stateMatrixDict", matrices);
+
+        IRenderedComponent<ApprovalTaskDetailsView> cut = context.Render<ApprovalTaskDetailsView>(parameters => parameters
+            .Add(p => p.Display, true)
+            .Add(p => p.WfHandler, handler)
+            .Add(p => p.States, new WfStateDict { Name = { [2] = "Approval" } }));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(cut.FindAll(".card"), Has.Count.EqualTo(2));
+            Assert.That(cut.Markup, Does.Contain("Create server object"));
+            Assert.That(cut.Markup, Does.Contain("Modify server object"));
+            Assert.That(cut.Markup, Does.Contain("server-new"));
+            Assert.That(cut.Markup, Does.Contain("server-old"));
+            Assert.That(cut.Markup, Does.Contain("requested_state"));
+            Assert.That(cut.FindAll("button.btn-warning"), Has.Count.GreaterThanOrEqualTo(4));
+        });
+    }
+
+    [Test]
+    public async Task ApprovalTaskDetailsView_RendersGroupTasksOnSeparateCards()
+    {
+        await using BunitContext context = CreateContext();
+        WfReqTask groupCreate = new()
+        {
+            Id = 41,
+            StateId = 2,
+            Title = "Create web group",
+            TaskType = WfTaskType.group_create.ToString(),
+            Elements =
+            [
+                new WfReqElement
+                {
+                    Field = ElemFieldType.source.ToString(),
+                    GroupName = "web-net",
+                    Name = "server-a",
+                    IpString = "10.30.0.10",
+                    RequestAction = RequestAction.create.ToString()
+                }
+            ]
+        };
+        WfReqTask groupModify = new()
+        {
+            Id = 42,
+            StateId = 2,
+            Title = "Modify web group",
+            TaskType = WfTaskType.group_modify.ToString(),
+            Elements =
+            [
+                new WfReqElement
+                {
+                    Field = ElemFieldType.source.ToString(),
+                    GroupName = "web-net",
+                    Name = "server-old",
+                    IpString = "10.30.0.11",
+                    RequestAction = RequestAction.delete.ToString()
+                },
+                new WfReqElement
+                {
+                    Field = ElemFieldType.source.ToString(),
+                    GroupName = "web-net",
+                    Name = "server-new",
+                    IpString = "10.30.0.12",
+                    RequestAction = RequestAction.create.ToString()
+                }
+            ]
+        };
+        WfReqTask groupDelete = new()
+        {
+            Id = 43,
+            StateId = 2,
+            Title = "Delete web group",
+            TaskType = WfTaskType.group_delete.ToString()
+        };
+        groupDelete.SetAddInfo(AdditionalInfoKeys.GrpName, "old-web-net");
+
+        WfReqTask serviceGroupCreate = new()
+        {
+            Id = 44,
+            StateId = 2,
+            Title = "Create service group",
+            TaskType = WfTaskType.group_create.ToString(),
+            Elements =
+            [
+                new WfReqElement
+                {
+                    Field = ElemFieldType.service.ToString(),
+                    GroupName = "web-services",
+                    Name = "https-member",
+                    Port = 443,
+                    ProtoId = 6,
+                    RequestAction = RequestAction.create.ToString()
+                }
+            ]
+        };
+
+        WfHandler handler = new() { ActTicket = new WfTicket { Tasks = [groupCreate, groupModify, groupDelete, serviceGroupCreate] } };
+        IRenderedComponent<ApprovalTaskDetailsView> cut = context.Render<ApprovalTaskDetailsView>(parameters => parameters
+            .Add(p => p.Display, true)
+            .Add(p => p.WfHandler, handler)
+            .Add(p => p.States, new WfStateDict { Name = { [2] = "Approval" } }));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(cut.FindAll(".card"), Has.Count.EqualTo(4));
+            Assert.That(cut.Markup, Does.Contain("Create web group"));
+            Assert.That(cut.Markup, Does.Contain("Modify web group"));
+            Assert.That(cut.Markup, Does.Contain("Delete web group"));
+            Assert.That(cut.Markup, Does.Contain("Create service group"));
+            Assert.That(cut.Markup, Does.Contain("web-net"));
+            Assert.That(cut.Markup, Does.Contain("server-old"));
+            Assert.That(cut.Markup, Does.Contain("server-new"));
+            Assert.That(cut.Markup, Does.Contain("old-web-net"));
+            Assert.That(cut.Markup, Does.Contain("add_member"));
+            Assert.That(cut.Markup, Does.Contain("remove_member"));
+            Assert.That(cut.Markup, Does.Contain("https-member"));
+        });
+    }
+
+    [Test]
+    public async Task ApprovalTaskDetailsView_ToggleIsAboveFirstAccessCardAndCyclesViews()
+    {
+        await using BunitContext context = CreateContext();
+        WfReqTask objectTask = new()
+        {
+            Id = 51,
+            StateId = 2,
+            Title = "Create object first",
+            TaskType = WfTaskType.object_create.ToString(),
+            Elements = [new WfReqElement { Field = ElemFieldType.source.ToString(), Name = "object", IpString = "10.40.0.1" }]
+        };
+        WfReqTask accessTask = new()
+        {
+            Id = 52,
+            StateId = 2,
+            Title = "Access task second",
+            TaskType = WfTaskType.access.ToString(),
+            Elements = [new WfReqElement { Field = ElemFieldType.source.ToString(), Name = "source", IpString = "10.40.0.2" }]
+        };
+        WfHandler handler = new() { ActTicket = new WfTicket { Tasks = [objectTask, accessTask] } };
+
+        IRenderedComponent<ApprovalTaskDetailsView> cut = context.Render<ApprovalTaskDetailsView>(parameters => parameters
+            .Add(p => p.Display, true)
+            .Add(p => p.WfHandler, handler)
+            .Add(p => p.States, new WfStateDict { Name = { [2] = "Approval" } }));
+
+        int togglePosition = cut.Markup.IndexOf("technical_view", StringComparison.Ordinal);
+        int accessPosition = cut.Markup.IndexOf("Access task second", StringComparison.Ordinal);
+        Assert.Multiple(() =>
+        {
+            Assert.That(togglePosition, Is.GreaterThanOrEqualTo(0));
+            Assert.That(togglePosition, Is.LessThan(accessPosition));
+        });
+
+        cut.Find("button.btn-secondary").Click();
+        Assert.That(cut.Markup, Does.Contain("unresolved_groups_view"));
+        cut.Find("button.btn-secondary").Click();
+        Assert.That(cut.Markup, Does.Contain("resolved_view"));
+        cut.Find("button.btn-secondary").Click();
+        Assert.That(cut.Markup, Does.Contain("technical_view"));
+    }
+
+    [Test]
+    public async Task ApprovalTaskDetailsView_DoesNotOfferEditorsForCompletedTask()
+    {
+        await using BunitContext context = CreateContext();
+        SimulatedUserConfig userConfig = (SimulatedUserConfig)context.Services.GetRequiredService<UserConfig>();
+        ApproverAllowedChangesConfig allowedChanges = new();
+        allowedChanges.SetTaskField(WfTaskType.access, WorkflowEditableFieldKeys.Title, true);
+        allowedChanges.SetTaskField(WfTaskType.access, WorkflowEditableFieldKeys.Owner, true);
+        allowedChanges.SetTaskField(WfTaskType.access, WorkflowEditableFieldKeys.Reason, true);
+        userConfig.ReqAllowedChangesByApprover = allowedChanges.ToConfigValue();
+
+        WfReqTask task = new()
+        {
+            Id = 61,
+            StateId = 10,
+            Title = "Already approved",
+            TaskType = WfTaskType.access.ToString(),
+            Reason = "reason",
+            Elements = [new WfReqElement { Field = ElemFieldType.source.ToString(), IpString = "10.50.0.1" }]
+        };
+        WfHandler handler = new() { ActTicket = new WfTicket { Tasks = [task] } };
+        StateMatrixDict matrices = new();
+        matrices.Matrices[WfTaskType.access.ToString()] = new StateMatrix { LowestInputState = 1, LowestEndState = 10 };
+        UiRequestWorkflowTest.SetMember(handler, "stateMatrixDict", matrices);
+
+        IRenderedComponent<ApprovalTaskDetailsView> cut = context.Render<ApprovalTaskDetailsView>(parameters => parameters
+            .Add(p => p.Display, true)
+            .Add(p => p.WfHandler, handler)
+            .Add(p => p.States, new WfStateDict { Name = { [10] = "Approved" } }));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(cut.Markup, Does.Contain("Already approved"));
+            Assert.That(cut.FindAll("button.btn-warning"), Is.Empty);
+        });
+    }
+
+    [Test]
+    public async Task DisplayObjectTaskElement_ReadOnlyShowsTimeNameAndValidityTogether()
+    {
+        await using BunitContext context = CreateContext();
+        WfReqTask task = new()
+        {
+            Id = 33,
+            TaskType = WfTaskType.object_modify.ToString(),
+            Elements =
+            [
+                new WfReqElement
+                {
+                    Field = ElemFieldType.time.ToString(),
+                    Name = "maintenance",
+                    StartTime = new DateTime(2026, 8, 1, 8, 0, 0),
+                    EndTime = new DateTime(2026, 8, 1, 17, 0, 0),
+                    RequestAction = RequestAction.unchanged.ToString()
+                },
+                new WfReqElement
+                {
+                    Field = ElemFieldType.time.ToString(),
+                    StartTime = new DateTime(2026, 8, 2, 8, 0, 0),
+                    EndTime = new DateTime(2026, 8, 2, 17, 0, 0),
+                    RequestAction = RequestAction.modify.ToString()
+                }
+            ]
+        };
+
+        IRenderedComponent<DisplayObjectTaskElement> cut = context.Render<DisplayObjectTaskElement>(parameters => parameters
+            .Add(p => p.ReqTask, task)
+            .Add(p => p.IsModify, true)
+            .Add(p => p.EditMode, false));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(cut.Markup, Does.Contain("maintenance"));
+            Assert.That(cut.Markup, Does.Contain("2026-08-02 08:00"));
+            Assert.That(cut.Markup, Does.Contain("2026-08-02 17:00"));
+            Assert.That(cut.Markup, Does.Contain("previous_state"));
+            Assert.That(cut.Markup, Does.Contain("requested_state"));
+        });
+    }
+
+    private static T InvokeApprovalHelper<T>(ApprovalTaskDetailsView component, string methodName, WfReqTask[] tasks)
+    {
+        MethodInfo method = typeof(ApprovalTaskDetailsView).GetMethod(methodName,
+            BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance)!;
+        return (T)method.Invoke(method.IsStatic ? null : component, [tasks])!;
+    }
+
+    private static async Task InvokeApprovalTaskWithNull(ApprovalTaskDetailsView component, string methodName, object? argument)
+    {
+        MethodInfo method = typeof(ApprovalTaskDetailsView).GetMethod(methodName,
+            BindingFlags.NonPublic | BindingFlags.Instance)!;
+        Task task = (Task)method.Invoke(component, new object?[] { argument })!;
+        await task;
     }
 
     private static WfReqTask BundledAccessTask(long id, long bundleId, int stateId)

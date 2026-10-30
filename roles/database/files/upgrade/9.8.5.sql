@@ -26,3 +26,5 @@ ALTER TABLE request.implelement
     REFERENCES request.reqtask(id)
     ON UPDATE RESTRICT
     ON DELETE SET NULL;
+
+insert into config (config_key, config_value, config_user) VALUES ('reqTimeObjectOriginSuffixes', '{"requester":"","approver":""}', 0) ON CONFLICT DO NOTHING;

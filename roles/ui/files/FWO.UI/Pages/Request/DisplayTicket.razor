@@ -114,15 +114,15 @@
                 {
                     <h5>@(userConfig.GetText("tasks"))</h5>
 
-                    @if (UseApprovalAccessTaskView)
+                    @if (UseApprovalTaskDetailsView)
                     {
                         <div class="mb-2">
-                            <button type="button" class="btn btn-sm btn-warning" disabled="@WfHandler.ReadOnlyMode" @onclick="OpenApprovalAccessTaskView">
+                        <button type="button" class="btn btn-sm btn-warning" disabled="@WfHandler.ReadOnlyMode" @onclick="OpenApprovalTaskDetailsView">
                                 @(DisplayService.DisplayButton(userConfig, "edit", Icons.Edit))
-                                @(userConfig.GetText("approval_access_task_view"))
+                                @(userConfig.GetText("approval_task_details_edit"))
                             </button>
                         </div>
-                        <ApprovalAccessTaskView @bind-Display="displayApprovalAccessTaskView"
+                        <ApprovalTaskDetailsView @bind-Display="displayApprovalTaskDetailsView"
                             WfHandler="WfHandler" States="States" EditField="OpenApprovalAccessTaskEditor" />
                         <DisplayReqTaskTable Phase="Phase" States="States" ReadOnlyDisplay="true"
                             WfHandler="WfHandler" ResetParent="CloseApprovalAccessTaskEditor"
@@ -164,7 +164,7 @@
     </Body>
     <Footer>
         <div class="btn-group">
-            @if(WfHandler.EditTicketMode && !UseApprovalAccessTaskView)
+            @if(WfHandler.EditTicketMode && !UseApprovalTaskDetailsView)
             {
                 <ExecutionModeAuthorizeView Roles="@($"{Roles.Admin}, {Roles.Requester}")">
                     <Authorized>
@@ -198,7 +198,7 @@
                     </NotAuthorized> 
                 </ExecutionModeAuthorizeView>
             }
-            @if((WfHandler.EditTicketMode && !UseApprovalAccessTaskView) || CanSaveTicketChanges() || CheckPromoteTicket())
+            @if((WfHandler.EditTicketMode && !UseApprovalTaskDetailsView) || CanSaveTicketChanges() || CheckPromoteTicket())
             {
                 <button type="button" class="btn btn-sm btn-secondary" @onclick:preventDefault @onclick="CancelEdit">@(DisplayService.DisplayButton(userConfig, "cancel", Icons.Cancel))</button>
             }
@@ -263,10 +263,10 @@
     private bool WorkInProgress = false;
     private WfPriority? selectedPriority;
     private bool firstParamSet = true;
-    private bool displayApprovalAccessTaskView = false;
+    private bool displayApprovalTaskDetailsView = false;
     private string? approvalAccessTaskField;
 
-    private bool UseApprovalAccessTaskView => Phase == WorkflowPhases.approval
+    private bool UseApprovalTaskDetailsView => Phase == WorkflowPhases.approval
         && userConfig.ReqApprovalEditMode == ApprovalEditMode.AccessTaskView;
 
     private string TicketRequesterDisplay => BuildTicketRequesterDisplay();
@@ -317,15 +317,15 @@
         await ResetParent();
     }
 
-    private void OpenApprovalAccessTaskView()
+    private void OpenApprovalTaskDetailsView()
     {
-        displayApprovalAccessTaskView = true;
+        displayApprovalTaskDetailsView = true;
     }
 
     private async Task OpenApprovalAccessTaskEditor(WfReqTask task, string fieldKey)
     {
         approvalAccessTaskField = fieldKey;
-        displayApprovalAccessTaskView = false;
+        displayApprovalTaskDetailsView = false;
         await WfHandler.SelectReqTask(task, ObjAction.approve, true);
     }
 
@@ -561,7 +561,7 @@
 
     private bool CanEditTicketField(string fieldKey)
     {
-        if (UseApprovalAccessTaskView)
+        if (UseApprovalTaskDetailsView)
         {
             return false;
         }
@@ -572,7 +572,7 @@
 
     private bool CanSaveTicketChanges()
     {
-        if (UseApprovalAccessTaskView)
+        if (UseApprovalTaskDetailsView)
         {
             return false;
         }

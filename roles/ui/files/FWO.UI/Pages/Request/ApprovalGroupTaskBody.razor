@@ -1,0 +1,137 @@
+@using FWO.Data
+@using FWO.Data.Workflow
+@using FWO.Ui.Display
+@using FWO.Ui.Services
+
+@inject UserConfig userConfig
+
+<div class="form-group row">
+    @ReadOnlyValue(userConfig.GetText("handler"), Handler)
+    @ReadOnlyValue(userConfig.GetText("assigned"), Assigned)
+    @if (ShowManagement)
+    {
+        @ReadOnlyValue(userConfig.GetText("management"), Management)
+    }
+    @if (ShowReason)
+    {
+        @ReadOnlyValue(userConfig.GetText("reason"), Reason)
+    }
+</div>
+<div class="form-group row">
+    @ReadOnlyValue(userConfig.GetText(IsServiceGroup ? "service_group" : "network_group"), GroupName)
+</div>
+<div class="form-group row">
+    <div class="col-12 d-flex align-items-start">
+        <label class="col-form-label col-form-label-sm mr-2 mb-2 text-nowrap" style="min-width: 10rem;">@(userConfig.GetText("members")):</label>
+        <div class="list-group flex-grow-1">
+            @foreach (NwObjectElement element in NetworkMembers)
+            {
+                @MemberRow(element.RequestAction, DisplayObject(element))
+            }
+            @foreach (NwServiceElement element in ServiceMembers)
+            {
+                @MemberRow(element.RequestAction, DisplayService(element))
+            }
+            @if (!NetworkMembers.Any() && !ServiceMembers.Any())
+            {
+                <div class="list-group-item border bg-secondary">-</div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public WfReqTask Task { get; set; } = new();
+    [Parameter] public IEnumerable<WfReqTask> TaskGroup { get; set; } = [];
+    [CascadingParameter] public ApprovalTaskViewContext Context { get; set; } = null!;
+
+    private ApprovalTaskDisplayLogic DisplayLogic => Context.DisplayLogic;
+    private AccessTaskFieldVisibilityConfig Visibility => Context.Visibility;
+    private string Handler => DisplayLogic.Handlers(TaskGroup);
+    private string Assigned => DisplayLogic.AssignedGroups(TaskGroup);
+    private string Management => DisplayLogic.ManagementIds(TaskGroup);
+    private string Reason => DisplayLogic.DistinctValues(TaskGroup, task => task.Reason);
+    private string GroupName => FirstNonEmpty(
+        Task.GetAddInfoValue(AdditionalInfoKeys.GrpName),
+        NetworkMembers.Select(member => member.GroupName).FirstOrDefault(name => !string.IsNullOrWhiteSpace(name)),
+        ServiceMembers.Select(member => member.GroupName).FirstOrDefault(name => !string.IsNullOrWhiteSpace(name)));
+    private bool IsServiceGroup => ServiceMembers.Any() && !NetworkMembers.Any();
+    private IEnumerable<NwObjectElement> NetworkMembers => Task.GetNwObjectElements(ElemFieldType.source);
+    private IEnumerable<NwServiceElement> ServiceMembers => Task.GetServiceElements();
+    private bool ShowManagement => Visibility.ShowManagement;
+    private bool ShowReason => Visibility.ShowReason;
+
+    private static string FirstNonEmpty(params string?[] values) => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? "";
+
+    private string DisplayObject(NwObjectElement element)
+    {
+        if (!string.IsNullOrWhiteSpace(element.Name) && !string.Equals(element.Name, element.GroupName, StringComparison.OrdinalIgnoreCase))
+        {
+            return element.Name;
+        }
+        if (element.FlowNetworkObjectId.HasValue || element.FlowNetworkGroupId.HasValue)
+        {
+            return element.FlowNetworkObjectId?.ToString() ?? element.FlowNetworkGroupId?.ToString() ?? "";
+        }
+        return NwObjDisplay.DisplayIp(element.IpString, element.IpEndString);
+    }
+
+    private string DisplayService(NwServiceElement element)
+    {
+        if (!string.IsNullOrWhiteSpace(element.Name) && !string.Equals(element.Name, element.GroupName, StringComparison.OrdinalIgnoreCase))
+        {
+            return element.Name;
+        }
+        if (element.FlowServiceObjectId.HasValue || element.FlowServiceGroupId.HasValue)
+        {
+            return element.FlowServiceObjectId?.ToString() ?? element.FlowServiceGroupId?.ToString() ?? "";
+        }
+        return DisplayBase.DisplayService(element, Context.DisplayIpProtos);
+    }
+
+    private RenderFragment MemberRow(string requestAction, string value) => builder =>
+    {
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "list-group-item border bg-secondary d-flex align-items-start");
+        builder.OpenElement(2, "span");
+        builder.AddAttribute(3, "class", "border bg-secondary px-2 py-1 d-inline-block flex-grow-1 text-break");
+        builder.AddContent(4, value);
+        builder.CloseElement();
+        builder.OpenElement(5, "span");
+        builder.AddAttribute(6, "class", $"badge {MemberBadgeClass(requestAction)} ml-2 text-nowrap");
+        builder.AddAttribute(7, "style", "min-width: 7rem;");
+        builder.AddContent(8, MemberAction(requestAction));
+        builder.CloseElement();
+        builder.CloseElement();
+    };
+
+    private string MemberAction(string requestAction) => requestAction switch
+    {
+        nameof(RequestAction.delete) => userConfig.GetText("remove_member"),
+        nameof(RequestAction.unchanged) => userConfig.GetText("unchanged"),
+        _ => userConfig.GetText("add_member")
+    };
+
+    private static string MemberBadgeClass(string requestAction) => requestAction switch
+    {
+        nameof(RequestAction.delete) => "text-bg-danger",
+        nameof(RequestAction.unchanged) => "text-bg-secondary",
+        _ => "text-bg-success"
+    };
+
+    private static RenderFragment ReadOnlyValue(string label, string value) => builder =>
+    {
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "col-xl-3 col-lg-6 mb-2 d-flex align-items-start");
+        builder.OpenElement(2, "label");
+        builder.AddAttribute(3, "class", "col-form-label col-form-label-sm mr-2 mb-0 text-nowrap");
+        builder.AddAttribute(4, "style", "min-width: 10rem;");
+        builder.AddContent(5, label + ":");
+        builder.CloseElement();
+        builder.OpenElement(6, "span");
+        builder.AddAttribute(7, "class", "border bg-secondary px-2 py-1 d-inline-block flex-grow-1 text-break");
+        builder.AddContent(8, string.IsNullOrWhiteSpace(value) ? "-" : value);
+        builder.CloseElement();
+        builder.CloseElement();
+    };
+}

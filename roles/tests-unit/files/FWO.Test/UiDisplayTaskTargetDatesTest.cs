@@ -488,6 +488,208 @@ namespace FWO.Test
         }
 
         [Test]
+        public async Task TimeObjectSelector_HideSelectionDoesNotRenderOrQuery()
+        {
+            await using BunitContext context = new();
+            UiRequestWorkflowTest.RequestWorkflowApiConn apiConn = new();
+            context.Services.AddSingleton<ApiConnection>(apiConn);
+            context.Services.AddSingleton<UserConfig>(new UiRequestWorkflowTest.RequestWorkflowUserConfig { ReqUseFlowDb = true });
+
+            IRenderedComponent<TimeObjectSelector> component = context.Render<TimeObjectSelector>(parameters => parameters
+                .Add(p => p.HideSelection, true)
+                .Add(p => p.TicketTimeObjects, new List<FlowTimeObject> { new() { Id = -1, Name = "ticket" } }));
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(component.FindComponents<Dropdown<FlowTimeObject>>(), Is.Empty);
+                Assert.That(apiConn.Queries, Does.Not.Contain(FlowQueries.getFlowRequestTimeObjectCatalog));
+            });
+        }
+
+        [Test]
+        public async Task TimeObjectSelector_DisablingSelectionDoesNotRender()
+        {
+            await using BunitContext context = new();
+            context.Services.AddSingleton<ApiConnection>(new UiRequestWorkflowTest.RequestWorkflowApiConn());
+            context.Services.AddSingleton<UserConfig>(new UiRequestWorkflowTest.RequestWorkflowUserConfig { ReqUseFlowDb = true });
+
+            IRenderedComponent<TimeObjectSelector> component = context.Render<TimeObjectSelector>(parameters => parameters
+                .Add(p => p.AllowSelection, false)
+                .Add(p => p.SelectedId, 12L)
+                .Add(p => p.SelectedName, "existing"));
+
+            Assert.That(component.FindComponents<Dropdown<FlowTimeObject>>(), Is.Empty);
+        }
+
+        [Test]
+        public async Task TimeObjectSelector_UsesFullWidthAndHidesLabel()
+        {
+            await using BunitContext context = new();
+            UiRequestWorkflowTest.RequestWorkflowApiConn apiConn = new()
+            {
+                FlowTimeObjects = [new FlowTimeObject
+                {
+                    Id = 31,
+                    Name = "Visible",
+                    State = FlowState.Requested,
+                    ShowInRequestModule = true
+                }]
+            };
+            context.Services.AddSingleton<ApiConnection>(apiConn);
+            context.Services.AddSingleton<UserConfig>(new UiRequestWorkflowTest.RequestWorkflowUserConfig
+            {
+                ReqUseFlowDb = true,
+                ReqFlowIntegration = new FlowIntegrationConfig
+                {
+                    SelectTimeObjects = FlowIntegrationObjectSelectionOptions.FromFlowDb
+                }.ToConfigValue()
+            });
+            context.Services.AddSingleton<DomEventService>();
+
+            IRenderedComponent<TimeObjectSelector> component = context.Render<TimeObjectSelector>(parameters => parameters
+                .Add(p => p.FullWidthLayout, true)
+                .Add(p => p.ShowLabel, false));
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(component.Markup, Does.Contain("col-12"));
+                Assert.That(component.Markup, Does.Not.Contain("time_object"));
+                Assert.That(component.FindComponent<Dropdown<FlowTimeObject>>().Instance.Elements, Has.Count.EqualTo(1));
+            });
+        }
+
+        [Test]
+        public async Task TimeObjectSelector_RestoresSelectedObjectByNameAndRaisesChangedCallbacks()
+        {
+            long? selectedId = null;
+            string? selectedName = "ticket window";
+            FlowTimeObject ticketTimeObject = new() { Id = -21, Name = "Ticket Window" };
+
+            await using BunitContext context = new();
+            context.Services.AddSingleton<ApiConnection>(new UiRequestWorkflowTest.RequestWorkflowApiConn());
+            context.Services.AddSingleton<UserConfig>(new UiRequestWorkflowTest.RequestWorkflowUserConfig { ReqUseFlowDb = false });
+            context.Services.AddSingleton<DomEventService>();
+
+            IRenderedComponent<TimeObjectSelector> component = context.Render<TimeObjectSelector>(parameters => parameters
+                .Add(p => p.SelectedName, selectedName)
+                .Add(p => p.SelectedIdChanged, EventCallback.Factory.Create<long?>(this, value => selectedId = value))
+                .Add(p => p.SelectedNameChanged, EventCallback.Factory.Create<string?>(this, value => selectedName = value))
+                .Add(p => p.TicketTimeObjects, new List<FlowTimeObject> { ticketTimeObject }));
+
+            Dropdown<FlowTimeObject> dropdown = component.FindComponent<Dropdown<FlowTimeObject>>().Instance;
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(dropdown.SelectedElement?.Id, Is.EqualTo(-21));
+                Assert.That(selectedId, Is.EqualTo(-21));
+                Assert.That(selectedName, Is.EqualTo("Ticket Window"));
+            });
+        }
+
+        [Test]
+        public async Task TimeObjectSelector_AddsFallbackForUnknownPersistedSelection()
+        {
+            await using BunitContext context = new();
+            context.Services.AddSingleton<ApiConnection>(new UiRequestWorkflowTest.RequestWorkflowApiConn());
+            context.Services.AddSingleton<UserConfig>(new UiRequestWorkflowTest.RequestWorkflowUserConfig { ReqUseFlowDb = false });
+            context.Services.AddSingleton<DomEventService>();
+
+            IRenderedComponent<TimeObjectSelector> component = context.Render<TimeObjectSelector>(parameters => parameters
+                .Add(p => p.SelectedId, -99L)
+                .Add(p => p.SelectedName, "Legacy window"));
+
+            Dropdown<FlowTimeObject> dropdown = component.FindComponent<Dropdown<FlowTimeObject>>().Instance;
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(dropdown.SelectedElement?.Id, Is.EqualTo(-99));
+                Assert.That(dropdown.SelectedElement?.Name, Is.EqualTo("Legacy window"));
+                Assert.That(dropdown.Elements, Has.Count.EqualTo(1));
+            });
+        }
+
+        [Test]
+        public async Task TimeObjectSelector_SelectTimeObjectRaisesAllSelectionCallbacks()
+        {
+            FlowTimeObject selectedObject = new() { Id = 44, Name = "Selected" };
+            FlowTimeObject? callbackObject = null;
+            long? selectedId = null;
+            string? selectedName = null;
+
+            await using BunitContext context = new();
+            context.Services.AddSingleton<ApiConnection>(new UiRequestWorkflowTest.RequestWorkflowApiConn());
+            context.Services.AddSingleton<UserConfig>(new UiRequestWorkflowTest.RequestWorkflowUserConfig());
+
+            IRenderedComponent<TimeObjectSelector> component = context.Render<TimeObjectSelector>(parameters => parameters
+                .Add(p => p.TimeObjectSelected, EventCallback.Factory.Create<FlowTimeObject>(this, value => callbackObject = value))
+                .Add(p => p.SelectedIdChanged, EventCallback.Factory.Create<long?>(this, value => selectedId = value))
+                .Add(p => p.SelectedNameChanged, EventCallback.Factory.Create<string?>(this, value => selectedName = value)));
+
+            await UiRequestWorkflowTest.InvokePrivateTask(component.Instance, "SelectTimeObject", selectedObject);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(callbackObject, Is.SameAs(selectedObject));
+                Assert.That(selectedId, Is.EqualTo(44));
+                Assert.That(selectedName, Is.EqualTo("Selected"));
+            });
+        }
+
+        [Test]
+        public async Task TimeObjectSelector_ParameterChangesRestoreAndClearSelection()
+        {
+            FlowTimeObject ticketTimeObject = new() { Id = -7, Name = "Ticket" };
+
+            await using BunitContext context = new();
+            context.Services.AddSingleton<ApiConnection>(new UiRequestWorkflowTest.RequestWorkflowApiConn());
+            context.Services.AddSingleton<UserConfig>(new UiRequestWorkflowTest.RequestWorkflowUserConfig { ReqUseFlowDb = false });
+            context.Services.AddSingleton<DomEventService>();
+
+            IRenderedComponent<TimeObjectSelector> component = context.Render<TimeObjectSelector>(parameters => parameters
+                .Add(p => p.SelectedId, -7L)
+                .Add(p => p.SelectedName, "Ticket")
+                .Add(p => p.TicketTimeObjects, new List<FlowTimeObject> { ticketTimeObject }));
+
+            Assert.That(component.FindComponent<Dropdown<FlowTimeObject>>().Instance.SelectedElement?.Id, Is.EqualTo(-7));
+
+            UiRequestWorkflowTest.SetMember(component.Instance, nameof(TimeObjectSelector.SelectedId), (long?)null);
+            UiRequestWorkflowTest.SetMember(component.Instance, nameof(TimeObjectSelector.SelectedName), (string?)null);
+            UiRequestWorkflowTest.GetPrivateMethod(typeof(TimeObjectSelector), "OnParametersSet")
+                .Invoke(component.Instance, []);
+
+            Assert.That(UiRequestWorkflowTest.GetMember<FlowTimeObject?>(component.Instance, "selectedTimeObjectInternal"), Is.Null);
+
+            UiRequestWorkflowTest.SetMember(component.Instance, nameof(TimeObjectSelector.SelectedId), -7L);
+            UiRequestWorkflowTest.GetPrivateMethod(typeof(TimeObjectSelector), "OnParametersSet")
+                .Invoke(component.Instance, []);
+
+            Assert.That(UiRequestWorkflowTest.GetMember<FlowTimeObject?>(component.Instance, "selectedTimeObjectInternal")?.Id, Is.EqualTo(-7));
+        }
+
+        [Test]
+        public async Task TimeObjectSelector_PrivateHelpersClassifySourcesAndDisplayIds()
+        {
+            await using BunitContext context = new();
+            context.Services.AddSingleton<ApiConnection>(new UiRequestWorkflowTest.RequestWorkflowApiConn());
+            context.Services.AddSingleton<UserConfig>(new UiRequestWorkflowTest.RequestWorkflowUserConfig { ReqUseFlowDb = false });
+            IRenderedComponent<TimeObjectSelector> component = context.Render<TimeObjectSelector>();
+
+            MethodInfo displayMethod = typeof(TimeObjectSelector).GetMethod("DisplayTimeObject", BindingFlags.NonPublic | BindingFlags.Instance)!;
+            MethodInfo sourceMethod = typeof(TimeObjectSelector).GetMethod("ShowsFlowDbSelection", BindingFlags.NonPublic | BindingFlags.Static)!;
+
+            string display = (string)displayMethod.Invoke(component.Instance, [new FlowTimeObject { Id = 55 }])!;
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(display, Is.EqualTo("55"));
+                Assert.That(sourceMethod.Invoke(null, [FlowIntegrationObjectSelectionOptions.FromFlowDb]), Is.EqualTo(true));
+                Assert.That(sourceMethod.Invoke(null, [FlowIntegrationObjectSelectionOptions.Both]), Is.EqualTo(true));
+                Assert.That(sourceMethod.Invoke(null, [FlowIntegrationObjectSelectionOptions.Manually]), Is.EqualTo(false));
+                Assert.That(sourceMethod.Invoke(null, ["unknown"]), Is.EqualTo(false));
+            });
+        }
+
+        [Test]
         public async Task DisplayTaskTargetDates_DateAndTimeInputsCanWrap()
         {
             await using BunitContext context = new();

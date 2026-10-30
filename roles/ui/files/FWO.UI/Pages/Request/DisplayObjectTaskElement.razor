@@ -97,17 +97,15 @@
 }
 else
 {
-    @if (!IsModify && requested != null)
-    {
-        <div class="form-group row mt-2">
-            <label class="col-sm-1 col-form-label col-form-label-sm">@(userConfig.GetText(ObjectTypeTextKey())):</label>
-            <div class="col-sm-3">
-                <label class="col-sm-12 h-100 border bg-secondary">@requested.Name</label>
-            </div>
-        </div>
-    }
     <div class="form-group row mt-2">
-        <div class="list-group col-sm-6">
+        @if (HasObjectName)
+        {
+            <div class="col-xl-4 col-lg-6 mb-2 d-flex align-items-start flex-nowrap">
+                <label class="col-form-label col-form-label-sm mr-2 mb-0 text-nowrap" style="min-width: 10rem;">@(userConfig.GetText(ObjectTypeTextKey())):</label>
+                <span class="border bg-secondary px-2 py-1 d-inline-block flex-grow-1 text-break">@ObjectName()</span>
+            </div>
+        }
+        <div class="list-group @(HasObjectName ? "col-xl-8 col-lg-6" : "col-12")">
             @if (original != null)
             {
                 <div class="list-group-item border bg-secondary">
@@ -117,7 +115,7 @@ else
             @if (!IsModify && requested != null)
             {
                 <div class="list-group-item border bg-secondary">
-                    <label>@DisplayElement(requested, false)</label>
+                    <label>@DisplayElement(requested)</label>
                 </div>
             }
             else if (requested != null)
@@ -501,7 +499,12 @@ else
 
     private string DisplayElement(WfReqElement element, bool includeName = true)
     {
-        string name = includeName && !string.IsNullOrWhiteSpace(element.Name) ? element.Name + " " : "";
+        string? elementName = element.Name;
+        if (includeName && WfObjectTaskHelper.GetKind(element) == ObjectTaskKind.Time && string.IsNullOrWhiteSpace(elementName))
+        {
+            elementName = ObjectName();
+        }
+        string name = includeName && !string.IsNullOrWhiteSpace(elementName) ? elementName + " " : "";
         switch (WfObjectTaskHelper.GetKind(element))
         {
             case ObjectTaskKind.Service:
@@ -523,6 +526,34 @@ else
             _ => "network_object"
         };
     }
+
+    private string ObjectName()
+    {
+        string requestedName = requested?.Name ?? "";
+        if (!string.IsNullOrWhiteSpace(requestedName))
+        {
+            return requestedName;
+        }
+
+        string originalName = original?.Name ?? "";
+        if (!string.IsNullOrWhiteSpace(originalName))
+        {
+            return originalName;
+        }
+
+        if (kind != ObjectTaskKind.Time)
+        {
+            return "";
+        }
+
+        WfReqElement? timeElement = requested ?? original;
+        return TimeObjectNamingHelper.BuildDateBasedName(
+            timeElement?.StartTime,
+            timeElement?.EndTime,
+            FlowIntegrationConfig.Parse(userConfig.ReqFlowIntegration).TimeObjectPrecision);
+    }
+
+    private bool HasObjectName => !string.IsNullOrWhiteSpace(ObjectName());
 
     private static string ValidationClass(bool? valid)
     {

@@ -92,6 +92,42 @@ namespace FWO.Test
         }
 
         [Test]
+        public async Task AssignOwner_WhenBusyDoesNothing()
+        {
+            DisplayImplementationTask component = new();
+            SetMember(component, "WorkInProgress", true);
+            SetMember(component, nameof(DisplayImplementationTask.WfHandler), new WfHandler());
+
+            await InvokePrivateTask(typeof(DisplayImplementationTask), component, "AssignOwner");
+
+            Assert.That(GetMember<bool>(component, "WorkInProgress"), Is.True);
+        }
+
+        [Test]
+        public void SetTargetDatesValid_StoresValidationState()
+        {
+            DisplayImplementationTask component = new();
+
+            GetPrivateMethod(typeof(DisplayImplementationTask), "SetTargetDatesValid").Invoke(component, [false]);
+
+            Assert.That(GetMember<bool>(component, "targetDatesValid"), Is.False);
+        }
+
+        [Test]
+        public async Task ConfPromoteImplTask_ForwardsTargetState()
+        {
+            WfImplTask implTask = new() { Id = 99, StateId = 1 };
+            WfHandler handler = new() { ActImplTask = implTask, ActStateMatrix = new StateMatrix() };
+            DisplayImplementationTask component = new();
+            SetMember(component, nameof(DisplayImplementationTask.WfHandler), handler);
+
+            await InvokePrivateTask(typeof(DisplayImplementationTask), component, "ConfPromoteImplTask",
+                new WfStatefulObject { StateId = 4 });
+
+            Assert.That(implTask.StateId, Is.EqualTo(4));
+        }
+
+        [Test]
         public void OnParametersSetAsync_InitializesCachedFields()
         {
             DisplayImplementationTask component = new();

@@ -1,4 +1,4 @@
--- text codes (roughly) categorized:
+﻿-- text codes (roughly) categorized:
 -- U: user texts (explanation or confirmation texts)
 -- E: error texts
 -- A: Api errors
@@ -7683,12 +7683,16 @@ INSERT INTO txt VALUES ('approval_edit_mode_access_task_view', 'German', 'Ansich
 INSERT INTO txt VALUES ('approval_edit_mode_access_task_view', 'English', 'Access task view');
 INSERT INTO txt VALUES ('approval_access_task_view', 'German', 'Zugriffsaufgaben');
 INSERT INTO txt VALUES ('approval_access_task_view', 'English', 'Access tasks');
+INSERT INTO txt VALUES ('approval_task_details_edit', 'German', 'Aufgabendetails und Bearbeitungsmodus');
+INSERT INTO txt VALUES ('approval_task_details_edit', 'English', 'Task details &amp; edit mode');
 INSERT INTO txt VALUES ('edit_access_task', 'German', 'Zugriffsaufgabe bearbeiten');
 INSERT INTO txt VALUES ('edit_access_task', 'English', 'Edit access task');
 INSERT INTO txt VALUES ('resolved_view', 'German', 'Aufgelöste Ansicht');
 INSERT INTO txt VALUES ('resolved_view', 'English', 'Resolved view');
 INSERT INTO txt VALUES ('technical_view', 'German', 'Technische Ansicht');
 INSERT INTO txt VALUES ('technical_view', 'English', 'Technical view');
+INSERT INTO txt VALUES ('unresolved_groups_view', 'German', 'Ansicht mit nicht aufgelösten Gruppen');
+INSERT INTO txt VALUES ('unresolved_groups_view', 'English', 'Unresolved groups view');
 INSERT INTO txt VALUES ('H5560', 'German',  'Implementierungs-Auftr&auml;ge pro Management: Objekt-Auftr&auml;ge (Gruppe anlegen, &auml;ndern, l&ouml;schen, Objekt anlegen, &auml;ndern) erhalten je Ziel-Management einen eigenen Implementierungs-Auftrag. Das Ziel ergibt sich aus den ger&auml;tespezifischen Einstellungen &quot;Anlage Adress-Objekte&quot;, &quot;Anlage Service-Objekte&quot; bzw. &quot;Anlage Zeitobjekte&quot; der Submanager: Bei &quot;Supermanager&quot; entsteht ein Auftrag auf dem Supermanager, bei &quot;Submanager&quot; je ein Auftrag auf jedem Submanager, bei &quot;Ignorieren&quot; keiner. Ein Management ohne Submanager ist selbst das Ziel, au&szlig;er es steht selbst auf &quot;Ignorieren&quot;. &quot;Ignorieren&quot; gibt es nur bei &quot;Anlage Zeitobjekte&quot;: Ergibt sich daraus kein Ziel, wird ein Auftrag f&uuml;r ein Zeitobjekt schon beim Speichern abgewiesen.');
 INSERT INTO txt VALUES ('H5560', 'English', 'Implementation tasks per management: Object tasks (create, modify, delete group, create, modify object) get one implementation task per target management. The target follows the device specific settings &quot;Address object creation&quot;, &quot;Service object creation&quot; resp. &quot;Time object creation&quot; of the sub-managements: &quot;Supermanager&quot; creates one task on the super-management, &quot;Submanager&quot; one task on each sub-management, &quot;Ignore&quot; none. A management without sub-managements is its own target unless it is set to &quot;Ignore&quot; itself. &quot;Ignore&quot; exists for &quot;Time object creation&quot; only: if it leaves no target, a time object task is already rejected when it is saved.');
 INSERT INTO txt VALUES ('H5561', 'German',  'In diesem Abschnitt k&ouml;nnen allgemeine Einstellungen zur Konfiguration der Workflows vorgenommen werden.');

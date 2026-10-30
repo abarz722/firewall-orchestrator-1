@@ -157,6 +157,21 @@ namespace FWO.Test
         }
 
         [Test]
+        public async Task DisplayRequestTask_SaveApprovalTaskChanges_DoesNothingWhileBusy()
+        {
+            DisplayRequestTask component = new();
+            SetPrivateField(component, "WorkInProgress", true);
+            SetPrivateField(component, nameof(DisplayRequestTask.WfHandler), new WfHandler
+            {
+                ActReqTask = new WfReqTask { Title = "Approval task", TaskType = WfTaskType.access.ToString() }
+            });
+
+            await InvokePrivateTask(component, "SaveApprovalTaskChanges");
+
+            Assert.That(GetPrivateField<bool>(component, "WorkInProgress"), Is.True);
+        }
+
+        [Test]
         public async Task ConfiguredTaskActions_RequestTask_ExecutesNormalReloadAndResetPath()
         {
             WfReqTask task = new() { Id = 0, TaskNumber = 1, Title = "Task", TaskType = WfTaskType.generic.ToString() };
